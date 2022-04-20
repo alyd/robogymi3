@@ -1,27 +1,14 @@
 import logging
 
-import click
 import numpy as np
-from robogym.envs.rearrange.common.base import RearrangeEnv, VisionArgs, GoalArgs
 
 from robogym.envs.rearrange.common.utils import _is_valid_proposal
 from robogym.envs.rearrange.goals.object_state import ObjectStateGoal
-NUM_OBJECTS = 4
 
-
-# def my_sample_object_colors(self, num_groups):
-#     all_colors = [[0,0,1,1],[0,1,0,1],[1,0,0,1],[1,1,0,1],[1,0,1,1],[0,1,1,1],[1,0.5,0,1],[1,0,0.5,1],[0.5,0,1,1],[0,0.5,1,1],[0.5,1,0,1],[0,1,0.5,1],[0.25,0,0.5,1]]
-#     # select a random color from the list of colors
-#     random_color_ids = self._random_state.randint(0,len(all_colors),num_groups)
-#     random_colors = np.array([all_colors[i] for i in random_color_ids])
-#     return random_colors
-
-# def my_sample_random_object_groups(
-#         self, dedupe_objects):
-#         return RearrangeEnv._sample_random_object_groups(dedupe_objects=True)
-
-# def _my_is_valid_proposal():
-#     print('testing')
+config = {'n':5000, 'num_objects':4, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14, 'goal_reward':1}
+OUTPUT_DIR = '/share'
+DEBUG = False
+ACTION_SPACE = 14
 
 def my_place_objects_in_grid(
     object_bounding_boxes,
@@ -123,7 +110,8 @@ def my_place_objects_in_grid(
                 b1_x, b1_y, object_idx, object_bounding_boxes_including_initial, placements
             ):
                 placement_valid = False
-                logging.warning(f"Trial {trial_i} failed on object {object_idx}")
+                # if (trial_i+1) % 30 == 0:
+                #     logging.warning(f"Trial {trial_i} failed on object {object_idx}")
                 break
 
             placements.append(placement)
@@ -138,7 +126,7 @@ def my_place_objects_in_grid(
 
 def my_sample_next_goal_positions(self, random_state):
     initial_placements = []
-    for step in range(NUM_OBJECTS):
+    for step in range(config['num_objects']):
         if np.all(self.mujoco_simulation.qpos[8+7*step:8+7*step+3]!=0):
             initial_placements.append(self.mujoco_simulation.qpos[8+7*step:8+7*step+3])
     placement, is_valid = my_place_objects_in_grid(
@@ -149,92 +137,101 @@ def my_sample_next_goal_positions(self, random_state):
         max_num_trials=self.mujoco_simulation.max_placement_retry,
         initial_placements= initial_placements
     )
-    print('using my version')
     return placement, is_valid
 
 
-
-# RearrangeEnv._sample_object_colors = my_sample_object_colors
-# RearrangeEnv._sample_random_object_groups = my_sample_random_object_groups
-
 ObjectStateGoal._sample_next_goal_positions = my_sample_next_goal_positions
+#RearrangeEnv.reset_goal = my_reset_goal
 
-from robogym.utils.env_utils import load_env
 from robogym.utils.parse_arguments import parse_arguments
 import matplotlib.pyplot as plt
 import pdb
-from myrearrange import make_env
-from robogym.envs.rearrange.observation.common import MujocoImageObservationProvider
+from myrearrange2 import make_env
+
+from data_collection_utils import create_h5, compute_action, render_env
+import datetime
+import tqdm
+import h5py
+
 
 
 logger = logging.getLogger(__name__)
 
-def create_h5(dataname, cfg, task_params, seqlen, obs_space, act_space):
-    H, W, C = obs_space.shape[-3:]
-    A = act_space.shape[0]
-    num_cameras = eu.get_num_cameras(cfg.env.camera)
-    n = cfg.n
-
-    h5 = h5py.File(f'{dataname}.h5', 'w')
-
-    h5.create_dataset('goal', (n, num_cameras, H, W, C))
-    h5.create_dataset('image', (n, seqlen, num_cameras, H, W, C))
-    h5.create_dataset('action', (n, seqlen, A))  # action space
-    h5.create_dataset('reward', (n, seqlen))
-    h5.create_dataset('is_first', (n, seqlen))
-    h5.create_dataset('is_last', (n, seqlen))
-    h5.create_dataset('is_terminal', (n, seqlen))
-
-    h5.attrs['cfg'] = ujson.dumps(cfg.to_dict())
-    h5.attrs['task_params'] = ujson.dumps({k: v.tolist() for k, v in task_params.items()})
-    h5.attrs['max_reward'] = 0.004  # or is it slightly higher than this? The max I got was 0.00401846
-    h5.attrs['action_space'] = act_space.shape
-    h5.attrs['observation_space'] = obs_space.shape[-3:]
-    return h5
-
-
 def main():
     """
-    Example uses:
         python robogym/scripts/collect_robogym_data.py
     """
-
-    image_size = 256
-    # with stabilization, the initial objects got stabilized but the goal objects didn't, 
+    # with stabilization, the initial and goal objects got stabilized differently, 
     # causing an undesired rotation between start and goal state. thus I disabled "stabilize_objects"
     make_env_args = {
-        "starting_seed": 2,
-        "constants": {"stabilize_objects":False, "normalize_mesh":True, "vision":True, "goal_args": {"randomize_goal_rot": False, "stabilize_goal":False}},
+        #"starting_seed": 5,
+        "constants": {"stabilize_objects":False, "normalize_mesh":True, "vision":DEBUG, "goal_args": {"randomize_goal_rot": False, "stabilize_goal":False}},
         "parameters": {
             "n_random_initial_steps": 0,
-            "simulation_params": {"num_objects": NUM_OBJECTS, 'mesh_scale':1.0, 'used_table_portion': 1.0,
+            "simulation_params": {"num_objects": config['num_objects'], 'mesh_scale':1.5, 'used_table_portion': 1.0,
             "camera_fovy_radius": 0.0},
         },
     }
-    
+    seqlen = config['num_objects'] + 1
+    dataname = f"{OUTPUT_DIR}/{datetime.datetime.now():%Y%m%d%H%M%S}"
+    print(f'Writing to {dataname}...')
+    h5 = create_h5(dataname, config, seqlen)
     env = make_env(**make_env_args)
-    print('env has been made')
-    goal_info = env.goal_info()[2]
     assert env is not None, print('doesn\'t seem to be a valid environment')
-    obs=env.reset()
-    #assert(np.allclose(env.goal_info()[2]['rel_goal_obj_rot'],0,atol=1e-3))
-    with env.mujoco_simulation.hide_target(hide_robot=True):
-        frame1=env.mujoco_simulation.render(width=image_size,height=image_size,camera_name='vision_cam_top')
-    plt.imsave('/share/teststart.png',frame1)
-    old_qpos = env.mujoco_simulation.qpos.copy()
-    goal_info = env.goal_info()[2]
-    goal_qpos = goal_info['goal']['qpos_goal'].copy()
-    frames=[]
-    with env.mujoco_simulation.hide_target(hide_robot=True):
-        for step in range(NUM_OBJECTS):
-            env.mujoco_simulation.mj_sim.data.qpos[8+7*step:8+7*(step+1)] = goal_qpos[8+7*step:8+7*(step+1)]
+    for j in tqdm.tqdm(range(config['n'])):
+        obs=env.reset()
+        while not env.goal_info()[2]['goal']['goal_valid']:
+            print('goal invalid, resetting')
+            obs=env.reset()
+        assert(env.goal_info()[2]['goal']['goal_valid'])
+        assert(np.allclose(env.goal_info()[2]['rel_goal_obj_rot'],0,atol=1e-3))
+        action = np.zeros(ACTION_SPACE)
+        reward, done = 0, False
+        if DEBUG:
+            old_qpos = env.mujoco_simulation.qpos.copy()
+        goal_qpos = env.goal_info()[2]['goal']['qpos_goal'].copy()
+        h5['image'][j, 0] = render_env(env, config)
+        h5['action'][j, 0] = action
+        h5['reward'][j, 0] = reward
+        h5['is_first'][j, 0] = True
+        h5['is_last'][j, 0] = False
+        h5['is_terminal'][j, 0] = done
+
+        # Place each object one by one:
+        for idx in range(config['num_objects']):
+            t = idx+1
+            is_last = (t >= seqlen-1)
+            action = compute_action(env, idx)
+            env.mujoco_simulation.mj_sim.data.qpos[8+7*idx:8+7*(idx+1)] = goal_qpos[8+7*idx:8+7*(idx+1)]
             env.mujoco_simulation.forward()
-            frame = env.mujoco_simulation.render(width=image_size,height=image_size,camera_name='vision_cam_top')
-            plt.imsave('/share/testframe'+str(step)+'.png',frame)
-    vision=env.observe()['vision_goal'][0]
-    plt.imsave('/share/testgoal.png',vision)
-  
-    pdb.set_trace()
+            h5['image'][j, t] = render_env(env, config)
+            h5['action'][j, t] = action
+            h5['reward'][j, t] = config['goal_reward']*is_last
+            h5['is_first'][j, t] = False
+            h5['is_last'][j, t] = is_last
+            h5['is_terminal'][j, t] = is_last
+        h5['goal'][j] = h5['image'][j, t].copy()
+    #pdb.set_trace()
+    
+    if DEBUG:
+        env.mujoco_simulation.mj_sim.data.qpos[:] = old_qpos
+        env.mujoco_simulation.forward()
+        with env.mujoco_simulation.hide_target(hide_robot=True):
+            frame1=env.mujoco_simulation.render(width=config['image_size'],height=config['image_size'],camera_name=config['camera'])
+        plt.imsave('/share/teststart.png',frame1)
+        goal_qpos = env.goal_info()[2]['goal']['qpos_goal'].copy()
+        f = h5py.File(dataname +'.h5', 'r')
+        pdb.set_trace()
+        with env.mujoco_simulation.hide_target(hide_robot=True):
+            for step in range(config['num_objects']):
+                env.mujoco_simulation.mj_sim.data.qpos[8+7*step:8+7*(step+1)] = goal_qpos[8+7*step:8+7*(step+1)]
+                env.mujoco_simulation.forward()
+                frame = env.mujoco_simulation.render(width=config['image_size'],height=config['image_size'],camera_name=config['camera'])
+                plt.imsave('/share/testframe'+str(step)+'.png',frame)
+       
+        vision=env.observe()['vision_goal'][0]
+        plt.imsave('/share/testgoal.png',vision)
+        
 
     
 
@@ -248,6 +245,10 @@ if __name__ == "__main__":
 
     main()
 
+#    old_qpos = env.mujoco_simulation.qpos.copy()
+
+# RearrangeEnv._sample_object_colors = my_sample_object_colors
+# RearrangeEnv._sample_random_object_groups = my_sample_random_object_groups
 
 #obs=env.observe()
 #obs = env.render(mode="rgb_array", width=256, height=256)
@@ -265,16 +266,16 @@ if __name__ == "__main__":
   # goal_img_provider = MujocoGoalImageObservationProvider(
     #                     env.mujoco_simulation,
     #                     'vision_cam_top',
-    #                     image_size,
+    #                     IMAGE_SIZE,
     #                     env.goal_info,
     #                     "qpos_goal",
     #                     hide_robot=True,
     #                 )
     # goal_images = goal_img_provider._render_goal_images(env.goal_info()[2]['goal']['qpos_goal'])
-        #ObsProvider = MujocoImageObservationProvider(env.mujoco_simulation, camera_names=['camera_top'], image_size=256)
+        #ObsProvider = MujocoImageObservationProvider(env.mujoco_simulation, camera_names=['camera_top'], IMAGE_SIZE=256)
 
 # constants = dict(normalize_mesh=True, vision=True, vision_args=VisionArgs(
-#         image_size=image_size, camera_names=['vision_cam_top']),
+#         IMAGE_SIZE=IMAGE_SIZE, camera_names=['vision_cam_top']),
 #         goal_args=GoalArgs(randomize_goal_rot=False, stabilize_goal=False))
 #     params = {'n_random_initial_steps':0,
 #         'simulation_params': {
