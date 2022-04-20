@@ -13,7 +13,7 @@ from robogym.envs.rearrange.common.mesh import (
 from robogym.envs.rearrange.goals.object_state_fixed import ObjectFixedStateGoal
 from robogym.envs.rearrange.simulation.base import ObjectGroupConfig
 from robogym.envs.rearrange.simulation.mesh import MeshRearrangeSim
-from robogym.envs.rearrange.common.utils import find_meshes_by_dirname
+from robogym.envs.rearrange.common.utils import find_meshes_by_dirname, get_combined_mesh
 from robogym.robot_env import build_nested_attr
 from robogym.utils.rotation import quat_from_angle_and_axis
 from robogym.observation.common import SyncType
@@ -29,6 +29,20 @@ class MyRearrangeEnv2(
 ):
     MESH_FILES = find_meshes_by_dirname('ycb')
     MESH_FILES.update(find_meshes_by_dirname('geom'))
+    # Remove the skinny object meshes
+    delete_meshes=['044_flat_screwdriver','042_adjustable_wrench']
+    restrict_meshes={}
+    for meshname, meshfile in MESH_FILES.items():
+        mesh=get_combined_mesh(meshfile)
+        if max(mesh.extents[0]/mesh.extents[1], mesh.extents[1]/mesh.extents[0])>1.7:
+            delete_meshes.append(meshname)
+        elif mesh.extents[2]/max(mesh.extents[0],mesh.extents[1])>1.5:
+            delete_meshes.append(meshname)
+            #restrict_meshes[meshname] = MESH_FILES[meshname]
+    for meshname in delete_meshes:
+        del MESH_FILES[meshname]
+    #MESH_FILES = restrict_meshes
+
 
     def _sample_random_object_groups(
         self, dedupe_objects: bool = False
@@ -36,7 +50,7 @@ class MyRearrangeEnv2(
         return super()._sample_random_object_groups(dedupe_objects=True)
 
     def _sample_object_colors(self, num_groups):
-        all_colors = [[0,0,1,1],[0,1,0,1],[1,0,0,1],[1,1,0,1],[1,0,1,1],[0,1,1,1],[1,0.5,0,1],[1,0,0.5,1],[0.5,0,1,1],[0,0.5,1,1],[0.5,1,0,1],[0,1,0.5,1],[0.25,0,0.5,1]]
+        all_colors = [[0,0,1,1],[0,1,0,1],[1,0,0,1],[1,1,0,1],[1,0,1,1],[0,1,1,1],[1,0.5,0,1],[1,0,0.5,1],[0.5,0,1,1],[0,0.5,1,1],[0.5,1,0,1],[0,1,0.5,1],[0.25,0,0.5,1],[0.25,0.5,0,1],[0,0.25,0.5,1],[0.5,0.25,0,1],[0.5,0,0.25,1],[0,0.5,0.25,1]]
         # select a random color from the list of colors
         random_color_ids =  self._random_state.randint(0,len(all_colors),num_groups)
         random_colors = np.array([all_colors[i] for i in random_color_ids])

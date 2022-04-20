@@ -8,6 +8,7 @@ from robogym.envs.rearrange.goals.object_state import ObjectStateGoal
 config = {'n':5000, 'num_objects':4, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14, 'goal_reward':1}
 OUTPUT_DIR = '/share'
 DEBUG = False
+DEBUG_NO_h5 = False
 ACTION_SPACE = 14
 
 def my_place_objects_in_grid(
@@ -173,57 +174,66 @@ def main():
         },
     }
     seqlen = config['num_objects'] + 1
-    dataname = f"{OUTPUT_DIR}/{datetime.datetime.now():%Y%m%d%H%M%S}"
-    print(f'Writing to {dataname}...')
-    h5 = create_h5(dataname, config, seqlen)
     env = make_env(**make_env_args)
     assert env is not None, print('doesn\'t seem to be a valid environment')
-    for j in tqdm.tqdm(range(config['n'])):
-        obs=env.reset()
-        while not env.goal_info()[2]['goal']['goal_valid']:
-            print('goal invalid, resetting')
-            obs=env.reset()
-        assert(env.goal_info()[2]['goal']['goal_valid'])
-        assert(np.allclose(env.goal_info()[2]['rel_goal_obj_rot'],0,atol=1e-3))
-        action = np.zeros(ACTION_SPACE)
-        reward, done = 0, False
+    if not DEBUG_NO_h5:
+        dataname = f"{OUTPUT_DIR}/{datetime.datetime.now():%Y%m%d%H%M%S}"
         if DEBUG:
-            old_qpos = env.mujoco_simulation.qpos.copy()
-        goal_qpos = env.goal_info()[2]['goal']['qpos_goal'].copy()
-        h5['image'][j, 0] = render_env(env, config)
-        h5['action'][j, 0] = action
-        h5['reward'][j, 0] = reward
-        h5['is_first'][j, 0] = True
-        h5['is_last'][j, 0] = False
-        h5['is_terminal'][j, 0] = done
+            dataname = dataname + 'debug'
+        print(f'Writing to {dataname}...')
+        h5 = create_h5(dataname, config, seqlen)
+    
+        for j in tqdm.tqdm(range(config['n'])):
+            obs=env.reset()
+            while not env.goal_info()[2]['goal']['goal_valid']:
+                print('goal invalid, resetting')
+                obs=env.reset()
+            assert(env.goal_info()[2]['goal']['goal_valid'])
+            assert(np.allclose(env.goal_info()[2]['rel_goal_obj_rot'],0,atol=1e-3))
+            action = np.zeros(ACTION_SPACE)
+            reward, done = 0, False
+            if DEBUG:
+                old_qpos = env.mujoco_simulation.qpos.copy()
+            goal_qpos = env.goal_info()[2]['goal']['qpos_goal'].copy()
+            h5['image'][j, 0] = render_env(env, config)
+            h5['action'][j, 0] = action
+            h5['reward'][j, 0] = reward
+            h5['is_first'][j, 0] = True
+            h5['is_last'][j, 0] = False
+            h5['is_terminal'][j, 0] = done
 
-        # Place each object one by one:
-        for idx in range(config['num_objects']):
-            t = idx+1
-            is_last = (t >= seqlen-1)
-            action = compute_action(env, idx)
-            env.mujoco_simulation.mj_sim.data.qpos[8+7*idx:8+7*(idx+1)] = goal_qpos[8+7*idx:8+7*(idx+1)]
-            env.mujoco_simulation.forward()
-            h5['image'][j, t] = render_env(env, config)
-            h5['action'][j, t] = action
-            h5['reward'][j, t] = config['goal_reward']*is_last
-            h5['is_first'][j, t] = False
-            h5['is_last'][j, t] = is_last
-            h5['is_terminal'][j, t] = is_last
-        h5['goal'][j] = h5['image'][j, t].copy()
-    #pdb.set_trace()
+            # Place each object one by one:
+            for idx in range(config['num_objects']):
+                t = idx+1
+                is_last = (t >= seqlen-1)
+                action = compute_action(env, idx)
+                env.mujoco_simulation.mj_sim.data.qpos[8+7*idx:8+7*(idx+1)] = goal_qpos[8+7*idx:8+7*(idx+1)]
+                env.mujoco_simulation.forward()
+                h5['image'][j, t] = render_env(env, config)
+                h5['action'][j, t] = action
+                h5['reward'][j, t] = config['goal_reward']*is_last
+                h5['is_first'][j, t] = False
+                h5['is_last'][j, t] = is_last
+                h5['is_terminal'][j, t] = is_last
+            h5['goal'][j] = h5['image'][j, t].copy()
     
     if DEBUG:
+        if DEBUG_NO_h5:
+            obs=env.reset()
+            old_qpos = env.mujoco_simulation.qpos.copy()
         env.mujoco_simulation.mj_sim.data.qpos[:] = old_qpos
         env.mujoco_simulation.forward()
         with env.mujoco_simulation.hide_target(hide_robot=True):
             frame1=env.mujoco_simulation.render(width=config['image_size'],height=config['image_size'],camera_name=config['camera'])
         plt.imsave('/share/teststart.png',frame1)
-        goal_qpos = env.goal_info()[2]['goal']['qpos_goal'].copy()
-        f = h5py.File(dataname +'.h5', 'r')
         pdb.set_trace()
+        #env.parameters.simulation_params.object_groups[3].mesh_files
+        goal_qpos = env.goal_info()[2]['goal']['qpos_goal'].copy()
+        if not DEBUG_NO_h5:
+            f = h5py.File(dataname +'.h5', 'r')
+            plt.imsave('/share/testh5.png',f['image'][-1,0,0])
         with env.mujoco_simulation.hide_target(hide_robot=True):
-            for step in range(config['num_objects']):
+            for step in range(0):#config['num_objects']):
                 env.mujoco_simulation.mj_sim.data.qpos[8+7*step:8+7*(step+1)] = goal_qpos[8+7*step:8+7*(step+1)]
                 env.mujoco_simulation.forward()
                 frame = env.mujoco_simulation.render(width=config['image_size'],height=config['image_size'],camera_name=config['camera'])

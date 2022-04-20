@@ -43,4 +43,4 @@ def compute_action(env, obj_idx):
 def render_env(env, config):
     with env.mujoco_simulation.hide_target(hide_robot=True):
         return env.mujoco_simulation.render(
-            width=config['image_size'],height=config['image_size'],camera_name=config['camera'])
+            width=config['image_size'],height=config['image_size'],camera_name=config['camera'])/255.0
