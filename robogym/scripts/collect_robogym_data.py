@@ -4,10 +4,10 @@ import numpy as np
 
 
 
-config = {'n':5000, 'num_objects':4, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14, 'goal_reward':1, 'notes':'no tall objects'}
+config = {'n':5000, 'num_objects':4, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14, 'goal_reward':1, 'notes':'goal pos jitter'}
 OUTPUT_DIR = '/share'
-DEBUG = True
-DEBUG_NO_h5 = True
+DEBUG = False
+DEBUG_NO_h5 = False
 ACTION_SPACE = 14
 
 
@@ -16,7 +16,7 @@ ACTION_SPACE = 14
 from robogym.utils.parse_arguments import parse_arguments
 import matplotlib.pyplot as plt
 import pdb
-from myrearrange2 import make_env, make_env_args
+from robogym_wrapper import make_env, make_env_args
 
 from data_collection_utils import create_h5, compute_action, render_env
 import datetime
@@ -35,7 +35,7 @@ def main():
     make_env_args['parameters']["simulation_params"]['num_objects'] = config['num_objects']
     make_env_args['constants']['vision'] = DEBUG
     make_env_args['constants']['success_reward'] = config['goal_reward']
-    make_env_args['starting_seed'] = 6
+    #make_env_args['starting_seed'] = 15 # 8
     seqlen = config['num_objects'] + 1
     env = make_env(**make_env_args)
     assert env is not None, print('doesn\'t seem to be a valid environment')
@@ -93,10 +93,7 @@ def main():
         with env.mujoco_simulation.hide_target(hide_robot=True):
             frame1=env.mujoco_simulation.render(width=config['image_size'],height=config['image_size'],camera_name=config['camera'])
         plt.imsave('/share/teststart.png',frame1)
-        pdb.set_trace()
-        from myrearrange2 import MyRearrangeEnv2
-        env.pick_and_place([1.4, 0.8, 0.5, 0,0,0,0,0.2,-0.4,0,0,0,0,0])
-        plt.imsave('/share/testpicknplace.png',render_env(env))
+       
         #env.parameters.simulation_params.object_groups[3].mesh_files
         goal_qpos = env.goal_info()[2]['goal']['qpos_goal'].copy()
         if not DEBUG_NO_h5:
@@ -112,9 +109,6 @@ def main():
         vision=env.observe()['vision_goal'][0]
         plt.imsave('/share/testgoal.png',vision)
         
-
-    
-
 
 if __name__ == "__main__":
     # This ensures that we spawn new processes instead of forking. This is necessary
