@@ -16,7 +16,7 @@ from robogym.envs.rearrange.simulation.mesh import MeshRearrangeSim
 from robogym.envs.rearrange.common.utils import find_meshes_by_dirname, get_combined_mesh
 from robogym.observation.common import SyncType
 
-from data_collection_utils import render_env, unique_deltas, compute_action, get_placement_bounds
+from data_collection_utils import render_env, unique_deltas, unique_dx, unique_dy, compute_action, get_placement_bounds
 
 import pdb
 logger = logging.getLogger(__name__)
@@ -45,6 +45,9 @@ class MyRearrangeEnv2(
 ):
     MESH_FILES = find_meshes_by_dirname('ycb')
     MESH_FILES.update(find_meshes_by_dirname('geom'))
+    TABLE_WIDTH = 0.6075
+    TABLE_HEIGHT = 0.58178
+
     if False:
         # Remove the skinny object meshes
         delete_meshes=[]#'044_flat_screwdriver','042_adjustable_wrench']
@@ -60,6 +63,21 @@ class MyRearrangeEnv2(
             del MESH_FILES[meshname]
         #MESH_FILES = restrict_meshes
 
+    def initialize(self):
+        super().initialize()
+        num_objects = self.parameters.simulation_params.num_objects
+        if num_objects > 4:
+            delete_meshes=[]
+            for meshname, meshfile in self.MESH_FILES.items():
+                mesh=get_combined_mesh(meshfile)
+                threshold = np.sqrt(2*num_objects)
+                if (self.TABLE_WIDTH/mesh.extents[0] < threshold) or (self.TABLE_HEIGHT/mesh.extents[1] < threshold):
+                #if (self.TABLE_WIDTH/mesh.extents[0])*(self.TABLE_WIDTH/mesh.extents[1]) < 2*num_objects:
+                    delete_meshes.append(meshname)
+            for meshname in delete_meshes:
+                del self.MESH_FILES[meshname] 
+            pdb.set_trace()
+
     def _sample_random_object_groups(
         self, dedupe_objects: bool = False
     ) -> List[ObjectGroupConfig]:
@@ -68,18 +86,10 @@ class MyRearrangeEnv2(
     def _sample_object_colors(self, num_groups):
         all_colors = [[0,0,1,1],[0,1,0,1],[1,0,0,1],[1,1,0,1],[1,0,1,1],[0,1,1,1],[1,0.5,0,1],[1,0,0.5,1],[0.5,0,1,1],[0,0.5,1,1],[0.5,1,0,1],[0,1,0.5,1],[0.25,0,0.5,1]]#,[0.25,0.5,0,1],[0,0.25,0.5,1],[0.5,0.25,0,1],[0.5,0,0.25,1],[0,0.5,0.25,1]]
         # select a random color from the list of colors
-        random_color_ids =  self._random_state.randint(0,len(all_colors),num_groups)
-        random_colors = np.array([all_colors[i] for i in random_color_ids])
+        #random_color_ids =  self._random_state.randint(0,len(all_colors),num_groups)
+        #random_colors = np.array([all_colors[i] for i in random_color_ids])
+        random_colors =  self._random_state.choice(all_colors, num_groups, replace=False)
         return random_colors
-
-    def _sample_object_size_scales(self, num_groups: int):
-        return np.exp(
-            self._random_state.uniform(
-                low=-self.parameters.object_scale_low,
-                high=self.parameters.object_scale_high,
-                size=num_groups,
-            )
-        )
 
     def _sample_object_meshes(self, num_groups: int) -> List[List[str]]:
         candidates = list(self.MESH_FILES.values())
@@ -143,8 +153,6 @@ class MyRearrangeEnv2(
         reward, done = self.pick_and_place(action)
         obs = self.i3observe()
         return obs, reward, done, None
-
-    
     
     def sample_option(self):
         """"
@@ -153,18 +161,17 @@ class MyRearrangeEnv2(
         """
         action = np.zeros(14)
         #action[7:9] = unique_deltas[np.random.choice(len(unique_deltas),size=1)[0],:]
-        action[7:9]
+        delta_x = unique_dx[np.random.choice(len(unique_dx),size=1)[0]]
+        delta_y = unique_dy[np.random.choice(len(unique_dy),size=1)[0]]
+        action[7:9] = delta_x, delta_y
         pos_x_min, pos_x_max, pos_y_min, pos_y_max = get_placement_bounds(self)
         pos_x = np.random.uniform(low=pos_x_min,high=pos_x_max)
         pos_y = np.random.uniform(low=pos_y_min,high=pos_y_max)
-        delta_x = np.random.uniform(low=pos_x_min - pos_x, high=pos_x_max - pos_x)
-        delta_y = np.random.uniform(low=pos_y_min - pos_y, high=pos_y_max - pos_y)
+        # delta_x = np.random.uniform(low=pos_x_min - pos_x, high=pos_x_max - pos_x)
+        # delta_y = np.random.uniform(low=pos_y_min - pos_y, high=pos_y_max - pos_y)
         action[:2] = pos_x, pos_y
-        action[7:9] = delta_x, delta_y
         return action
        
-
-
 
 from robogym.envs.rearrange.common.utils import _is_valid_proposal
 from robogym.envs.rearrange.goals.object_state import ObjectStateGoal
@@ -204,6 +211,14 @@ def my_place_objects_in_grid(
     def _get_global_placement(placement: np.ndarray):
         return placement + [offset_x, offset_y, 0.0] - table_size + table_pos
 
+    def _get_local_coords(global_placement, object_bounding_box, cell_width, cell_height):
+        pos, size = object_bounding_box
+        prop = global_placement - [offset_x, offset_y, 0.0] + table_size - table_pos
+        col = (prop[0] + pos[0] - size[0])/cell_width
+        row = (prop[1] + pos[1] - size[1])/cell_height
+        assert np.allclose(round(col), col, atol=1e-6) and np.allclose(round(row), row, atol=1e-6)
+        return round(row), round(col)
+
     # 1. Determine the number of rows and columns of the grid, based on the largest object width
     # and height.
     total_object_area = 0.0
@@ -228,24 +243,28 @@ def my_place_objects_in_grid(
     cell_width = width / n_columns
     cell_height = height / n_rows
 
-    if n_cells < n_objects:
+    if n_cells < n_objects*2:
         # Cannot find a valid placement via this method; give up.
         logging.warning(
             f"Unable to fit {n_objects} objects into placement area with {n_cells} cells"
         )
         return np.zeros(shape=(n_objects, 3)), False
 
+    
+    # 2. Initialize an array with all valid cell coordinates.
+    # Create an array of shape (n_rows, n_columns, 2) where each element contains the row,col
+    # coord
+    valid_coords = np.dstack(np.mgrid[0:n_rows, 0:n_columns])
+    valid_coords = np.reshape(valid_coords, (n_rows * n_columns, 2))
+    if len(initial_placements)>0:
+        initial_coords = [_get_local_coords(initial_placements[idx], object_bounding_boxes[idx], cell_width, cell_height) for idx in range(n_objects)]
+        valid_coords = np.delete(valid_coords, [n_columns*ic[0]+ic[1] for ic in initial_coords], 0)
     for trial_i in range(max_num_trials):
         placement_valid = True
         placements = [i for i in initial_placements]
-
         # 2. Initialize an array with all valid cell coordinates.
-
-        # Create an array of shape (n_rows, n_columns, 2) where each element contains the row,col
-        # coord
-        coords = np.dstack(np.mgrid[0:n_rows, 0:n_columns])
+        coords = np.copy(valid_coords)
         # Create a shuffled list where ever entry is a valid (row, column) coordinate.
-        coords = np.reshape(coords, (n_rows * n_columns, 2))
         random_state.shuffle(coords)
         coords = list(coords)
 
@@ -319,16 +338,17 @@ make_env = MyRearrangeEnv2.build
 
 if __name__ == "__main__":
     make_env_args['starting_seed'] = 15
-    make_env_args['parameters']["simulation_params"]['num_objects'] = 3
+    make_env_args['parameters']["simulation_params"]['num_objects'] = 5
     env = make_env(**make_env_args)
     obs = env.i3reset()
+    while not env.goal_info()[2]['goal']['goal_valid']:
+        print('goal invalid, resetting')
+        obs=env.i3reset()
     for idx in range(make_env_args['parameters']["simulation_params"]['num_objects']):
         action = compute_action(env, idx)
-        print(action[7:9])
-        pdb.set_trace()
+        assert(np.allclose(min(np.abs(action[7]-unique_dx)),0,atol=1e-5) and np.allclose(min(abs(action[8]-unique_dy)),0,atol=1e-5))
         #assert(action[7:9] in unique_deltas)
     print(env.sample_option())
-    pdb.set_trace()
     import matplotlib.pyplot as plt
     plt.imsave('/share/testresetStart.png',obs[0])
     plt.imsave('/share/testresetGoal.png',obs[1])
@@ -343,7 +363,6 @@ if __name__ == "__main__":
         perfect_action[:3]=current_pos[obj]
         perfect_action[7:10]=rel_goal_pos[obj]
         next_obs, reward, done, info = env.i3step(perfect_action)
-        print(reward, done)
         if obj < len(rel_goal_pos)-1:
             assert(reward==0 and done==False)
         else:

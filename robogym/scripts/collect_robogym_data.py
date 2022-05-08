@@ -4,7 +4,7 @@ import numpy as np
 
 
 
-config = {'n':5000, 'num_objects':4, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14, 'goal_reward':1, 'notes':'goal pos jitter'}
+config = {'notes':'goal pos jitter', 'n':5000, 'num_objects':4, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14, 'goal_reward':1, }
 OUTPUT_DIR = '/share'
 DEBUG = False
 DEBUG_NO_h5 = False
