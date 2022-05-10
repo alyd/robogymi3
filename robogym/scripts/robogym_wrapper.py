@@ -3,6 +3,8 @@ from typing import List
 
 import attr
 import numpy as np
+import pickle
+from copy import deepcopy
 
 from robogym.envs.rearrange.common.mesh import (
     MeshRearrangeEnv,
@@ -76,8 +78,7 @@ class MyRearrangeEnv2(
                 #if (self.TABLE_WIDTH/mesh.extents[0])*(self.TABLE_WIDTH/mesh.extents[1]) < 2*num_objects:
                     delete_meshes.append(meshname)
             for meshname in delete_meshes:
-                del self.MESH_FILES[meshname] 
-            
+                del self.MESH_FILES[meshname]           
 
     def _sample_random_object_groups(
         self, dedupe_objects: bool = False
@@ -208,7 +209,39 @@ class MyRearrangeEnv2(
         # delta_y = np.random.uniform(low=pos_y_min - pos_y, high=pos_y_max - pos_y)
         action[:2] = pos_x, pos_y
         return action
-       
+
+    def get_state_data(self):
+        pos_state = self.sim.get_state()
+        return (pos_state,self.parameters,self._goal)
+
+    def save_state(self, path):
+        file_pi = open(path, 'wb')
+        pickle.dump(self.get_state_data(), file_pi)
+        file_pi.close()
+        pass
+
+    def load_state(self, state):
+        pos_data = state[0]
+        params = state[1]
+        goal = state[2]
+        self.constants.normalize_mesh = False
+        self._set_object_groups(deepcopy(params.simulation_params.object_groups))
+        self._goal = goal
+        self._recreate_sim()
+        self._apply_object_colors()
+        self.sim.set_state(pos_data)
+        self.mujoco_simulation.forward()
+        self.update_goal_info()
+        self._observe_sync(sync_type=SyncType.RESET_GOAL)
+        pass
+
+    def load_pickle_state(self, path):
+        file_pi = open(path, 'rb') 
+        env_state = pickle.load(file_pi)
+        self.load_state(env_state)
+        file_pi.close()
+        pass
+      
 from robogym.envs.rearrange.goals.object_state import ObjectStateGoal
 
 def my_place_objects_in_grid(
@@ -372,7 +405,7 @@ ObjectStateGoal._sample_next_goal_positions = my_sample_next_goal_positions
 make_env = MyRearrangeEnv2.build
 
 if __name__ == "__main__":
-    make_env_args['starting_seed'] = 15
+    make_env_args['starting_seed'] = 14
     make_env_args['parameters']["simulation_params"]['num_objects'] = 4
     env = make_env(**make_env_args)
     obs = env.i3reset()
@@ -390,6 +423,16 @@ if __name__ == "__main__":
         assert reward == idx+1
         plt.imsave('/share/testAction'+str(idx)+'.png',next_obs[0])
         #assert(action[7:9] in unique_deltas)
+        if idx == -2+ make_env_args['parameters']["simulation_params"]['num_objects']:
+            env.save_state('/share/test_load_env')
+    env2 = make_env(**make_env_args)
+    env2.load_pickle_state('/share/test_load_env')
+    plt.imsave('/share/test_load_env.png', env2.i3observe()[0])
+    test_action = compute_action(env2, idx)
+    assert np.allclose(test_action, action)
+    test_obs, reward, done, info = env2.i3step(action)
+    assert np.allclose(test_obs[0], next_obs[0])
+    assert reward == idx+1
     pdb.set_trace()
     print(env.sample_option())
     invalid_actions = [np.array([1.22, 0.84, 0.49, 0,0,0,0, 0,0.1,0,0,0,0,0]),np.array([1.22, 0.84, 0.49, 0,0,0,0, 0.2,0,0,0,0,0,0])]

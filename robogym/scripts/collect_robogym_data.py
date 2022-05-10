@@ -2,18 +2,13 @@ import logging
 
 import numpy as np
 
-
-
 config = {'notes':'goal pos jitter', 'n':5000, 'num_objects':4, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14, 'goal_reward':1, }
 OUTPUT_DIR = '/share'
 DEBUG = False
-DEBUG_NO_h5 = False
+SAVE_h5 = False
 ACTION_SPACE = 14
 
 
-#RearrangeEnv.reset_goal = my_reset_goal
-
-from robogym.utils.parse_arguments import parse_arguments
 import matplotlib.pyplot as plt
 import pdb
 from robogym_wrapper import make_env, make_env_args
@@ -31,15 +26,15 @@ def main():
     """
         python robogym/scripts/collect_robogym_data.py
     """
-    # override the default arguments from myrearrange2
+    # override the default arguments from robogym_wrapper.py
     make_env_args['parameters']["simulation_params"]['num_objects'] = config['num_objects']
-    make_env_args['constants']['vision'] = DEBUG
+    make_env_args['constants']['vision'] = DEBUG # only needed to check env.observe()['vision_goal'][0]
     make_env_args['constants']['success_reward'] = config['goal_reward']
     #make_env_args['starting_seed'] = 15 # 8
     seqlen = config['num_objects'] + 1
     env = make_env(**make_env_args)
     assert env is not None, print('doesn\'t seem to be a valid environment')
-    if not DEBUG_NO_h5:
+    if SAVE_h5:
         dataname = f"{OUTPUT_DIR}/{datetime.datetime.now():%Y%m%d%H%M%S}"
         if DEBUG:
             dataname = dataname + 'debug'
@@ -55,8 +50,6 @@ def main():
             assert(np.allclose(env.goal_info()[2]['rel_goal_obj_rot'],0,atol=1e-3))
             action = np.zeros(ACTION_SPACE)
             reward, done = 0, False
-            if DEBUG:
-                old_qpos = env.mujoco_simulation.qpos.copy()
             goal_qpos = env.goal_info()[2]['goal']['qpos_goal'].copy()
             h5['image'][j, 0] = render_env(env, config)
             h5['action'][j, 0] = action
@@ -82,7 +75,7 @@ def main():
             h5['goal'][j] = h5['image'][j, t].copy()
     
     if DEBUG:
-        if DEBUG_NO_h5:
+        if not SAVE_h5:
             obs=env.reset()
             while not env.goal_info()[2]['goal']['goal_valid']:
                 print('goal invalid, resetting')
@@ -96,7 +89,7 @@ def main():
        
         #env.parameters.simulation_params.object_groups[3].mesh_files
         goal_qpos = env.goal_info()[2]['goal']['qpos_goal'].copy()
-        if not DEBUG_NO_h5:
+        if SAVE_h5:
             f = h5py.File(dataname +'.h5', 'r')
             plt.imsave('/share/testh5.png',f['image'][-1,0,0])
         with env.mujoco_simulation.hide_target(hide_robot=True):
