@@ -69,17 +69,20 @@ class MyRearrangeEnv2(
     def initialize(self):
         super().initialize()
         num_objects = self.parameters.simulation_params.num_objects
-        if num_objects > 4:
+        if num_objects > 3:
             delete_meshes=[]
             for meshname, meshfile in self.MESH_FILES.items():
                 mesh=get_combined_mesh(meshfile)
-                threshold = np.sqrt(2*num_objects)
-                if (self.TABLE_WIDTH/mesh.extents[0] < threshold) or (self.TABLE_HEIGHT/mesh.extents[1] < threshold):
+                threshold = 1.2*np.sqrt(2*num_objects)
+                normed_extents = mesh.extents * self.constants.normalized_mesh_size/np.max(mesh.extents)
+                max_breadth = np.sqrt(normed_extents[0]**2+normed_extents[1]**2)
+                if (self.TABLE_WIDTH/(2*max_breadth) < threshold) or (self.TABLE_HEIGHT/(2*max_breadth) < threshold):
                 #if (self.TABLE_WIDTH/mesh.extents[0])*(self.TABLE_WIDTH/mesh.extents[1]) < 2*num_objects:
                     delete_meshes.append(meshname)
             for meshname in delete_meshes:
-                del self.MESH_FILES[meshname]           
-
+                del self.MESH_FILES[meshname]
+            print('choosing from ', len(self.MESH_FILES), ' meshes')
+           
     def _sample_random_object_groups(
         self, dedupe_objects: bool = False
     ) -> List[ObjectGroupConfig]:
@@ -118,6 +121,18 @@ class MyRearrangeEnv2(
                 + self._goal.get("goal_invalid_reason", "Goal is invalid.")
             )
         return obs
+
+    def _randomize_object_initial_positions(self):
+        """
+        Randomize initial position for each object.
+        """
+        object_pos, is_valid = self._generate_object_placements()
+
+        while not is_valid:
+            print("Object initial placement is invalid, regenerating")
+            object_pos, is_valid = self._generate_object_placements()
+
+        self.mujoco_simulation.set_object_pos(object_pos)
 
     # The i3 methods handle actions and return observations of the type used
     # in implicit-iterative-inference
@@ -164,29 +179,6 @@ class MyRearrangeEnv2(
         reward = sum(goal_distances < success_dist_threshold)
         return reward, False
 
-    def pick_and_place_sparse(self, action):
-        reward = 0 
-        obj_positions = self.goal_info()[2]['current_state']['obj_pos'][:,:2]
-        prev_goal_max_dist = self.goal_info()[2]['goal_max_dist']['obj_pos']
-        success_dist_threshold = self.constants.success_threshold['obj_pos']
-        if prev_goal_max_dist <= success_dist_threshold:
-            done = True
-        else:
-            done = False
-        pick_pos = action[:2]
-        distances = [np.linalg.norm(obj_pos-pick_pos) for obj_pos in obj_positions]
-        closest_obj = np.argmin(distances)
-        if distances[closest_obj] < success_dist_threshold:
-            if self._is_valid_action(closest_obj, obj_positions, action):
-                self.mujoco_simulation.mj_sim.data.qpos[8+7*closest_obj:8+7*closest_obj+2] += action[7:9]
-                self.mujoco_simulation.forward()
-                self.update_goal_info()
-                new_goal_max_dist = self.goal_info()[2]['goal_max_dist']['obj_pos']
-                if (prev_goal_max_dist > success_dist_threshold) and (new_goal_max_dist<=success_dist_threshold):
-                    done = True
-                    reward = self.constants.success_reward
-        return reward, done
-
     def i3step(self, action):
         reward, done = self.pick_and_place(action)
         obs = self.i3observe()
@@ -199,14 +191,14 @@ class MyRearrangeEnv2(
         """
         action = np.zeros(14)
         #action[7:9] = unique_deltas[np.random.choice(len(unique_deltas),size=1)[0],:]
-        delta_x = unique_dx[self._random_state.choice(len(unique_dx),size=1)[0]]
-        delta_y = unique_dy[self._random_state.choice(len(unique_dy),size=1)[0]]
-        action[7:9] = delta_x, delta_y
+        # delta_x = unique_dx[self._random_state.choice(len(unique_dx),size=1)[0]]
+        # delta_y = unique_dy[self._random_state.choice(len(unique_dy),size=1)[0]]
         pos_x_min, pos_x_max, pos_y_min, pos_y_max = get_placement_bounds(self)
         pos_x = self._random_state.uniform(low=pos_x_min,high=pos_x_max)
         pos_y = self._random_state.uniform(low=pos_y_min,high=pos_y_max)
-        # delta_x = np.random.uniform(low=pos_x_min - pos_x, high=pos_x_max - pos_x)
-        # delta_y = np.random.uniform(low=pos_y_min - pos_y, high=pos_y_max - pos_y)
+        delta_x = self._random_state.uniform(low=pos_x_min - pos_x, high=pos_x_max - pos_x)
+        delta_y = self._random_state.uniform(low=pos_y_min - pos_y, high=pos_y_max - pos_y)
+        action[7:9] = delta_x, delta_y
         action[:2] = pos_x, pos_y
         return action
 
@@ -311,7 +303,11 @@ def my_place_objects_in_grid(
     cell_width = width / n_columns
     cell_height = height / n_rows
 
-    if n_cells < n_objects*2:
+    remove_initial_grid_coords = True
+    min_cells = n_objects
+    if remove_initial_grid_coords:
+        min_cells = n_objects*2
+    if n_cells < min_cells:
         # Cannot find a valid placement via this method; give up.
         logging.warning(
             f"Unable to fit {n_objects} objects into placement area with {n_cells} cells"
@@ -324,7 +320,7 @@ def my_place_objects_in_grid(
     # coord
     valid_coords = np.dstack(np.mgrid[0:n_rows, 0:n_columns])
     valid_coords = np.reshape(valid_coords, (n_rows * n_columns, 2))
-    if len(initial_placements)>0:
+    if len(initial_placements)>0 and remove_initial_grid_coords:
         initial_coords = [_get_local_coords(initial_placements[idx], object_bounding_boxes[idx], cell_width, cell_height) for idx in range(n_objects)]
         valid_coords = np.delete(valid_coords, [n_columns*ic[0]+ic[1] for ic in initial_coords], 0)
     for trial_i in range(max_num_trials):
@@ -406,7 +402,7 @@ make_env = MyRearrangeEnv2.build
 
 if __name__ == "__main__":
     make_env_args['starting_seed'] = 14
-    make_env_args['parameters']["simulation_params"]['num_objects'] = 4
+    make_env_args['parameters']["simulation_params"]['num_objects'] = 6
     env = make_env(**make_env_args)
     obs = env.i3reset()
     while not env.goal_info()[2]['goal']['goal_valid']:
