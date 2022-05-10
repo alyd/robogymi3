@@ -2,9 +2,9 @@ import logging
 
 import numpy as np
 
-config = {'n':2, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14,}
+config = {'n':100, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14,}
 OUTPUT_DIR = '/share'
-DEBUG = True
+DEBUG = False
 
 import matplotlib.pyplot as plt
 import pdb
@@ -14,6 +14,7 @@ import pickle
 from data_collection_utils import create_h5, compute_action, render_env
 import datetime
 import tqdm
+from copy import deepcopy
 
 
 logger = logging.getLogger(__name__)
@@ -21,15 +22,16 @@ logger = logging.getLogger(__name__)
 def main():
     """
         python robogym/scripts/collect_robogym_data.py
+        /share/env_states20220509194443
     """
     # override the default arguments from robogym_wrapper.py
-    make_env_args['starting_seed'] = 15 # 8
+    #make_env_args['starting_seed'] = 15 # 8
     dataname = f"{OUTPUT_DIR}/env_states{datetime.datetime.now():%Y%m%d%H%M%S}"
     if DEBUG:
         dataname = dataname + 'debug'
     print(f'Writing to {dataname}...')
     states = {}
-    all_object_nums = [5]
+    all_object_nums = [4]
     for object_num in all_object_nums:
         states[object_num] = []
         make_env_args['parameters']["simulation_params"]['num_objects'] = object_num
@@ -47,6 +49,7 @@ def main():
     file_pi = open(dataname, 'wb') 
     pickle.dump(states, file_pi)
     file_pi.close()
+    print('saved to ', dataname)
 
     if DEBUG:
         file_pi = open(dataname, 'rb') 
@@ -56,9 +59,12 @@ def main():
         env2 = make_env(**make_env_args)
         env2.load_state(states[5][0])
         plt.imsave('/share/test_load_env.png', env2.i3observe()[0])
-        plt.imsave('/share/test_load_goal.png', env2.i3observe()[1])
+        env2 = make_env(**make_env_args)
+        env2.load_state(states[5][1])
+        plt.imsave('/share/test_load_env2.png', env2.i3observe()[0])
         action = compute_action(env2, 0)
         next_obs, reward, done, info = env2.i3step(action)
+        pdb.set_trace()
         assert reward == 1
         plt.imsave('/share/test_load_envAction.png',next_obs[0])
         plt.imsave('/share/test_load_envActiongoal.png', next_obs[1])

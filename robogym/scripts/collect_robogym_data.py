@@ -2,10 +2,10 @@ import logging
 
 import numpy as np
 
-config = {'notes':'goal pos jitter', 'n':5000, 'num_objects':4, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14, 'goal_reward':1, }
+config = {'notes':'8 objects', 'n':5000, 'num_objects':8, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14, 'goal_reward':1, }
 OUTPUT_DIR = '/share'
 DEBUG = False
-SAVE_h5 = False
+SAVE_h5 = True
 ACTION_SPACE = 14
 
 
@@ -35,7 +35,7 @@ def main():
     env = make_env(**make_env_args)
     assert env is not None, print('doesn\'t seem to be a valid environment')
     if SAVE_h5:
-        dataname = f"{OUTPUT_DIR}/{datetime.datetime.now():%Y%m%d%H%M%S}"
+        dataname = f"{OUTPUT_DIR}/{datetime.datetime.now():%Y%m%d%H%M%S}_{config['num_objects']}objs"
         if DEBUG:
             dataname = dataname + 'debug'
         print(f'Writing to {dataname}...')
@@ -73,6 +73,7 @@ def main():
                 h5['is_last'][j, t] = is_last
                 h5['is_terminal'][j, t] = is_last
             h5['goal'][j] = h5['image'][j, t].copy()
+        print(f'saved to {dataname}')
     
     if DEBUG:
         if not SAVE_h5:

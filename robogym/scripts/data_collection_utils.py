@@ -1,7 +1,7 @@
 import h5py
 import ujson
 import numpy as np
-from robogym.utils.rotation import euler2quat
+#from robogym.utils.rotation import euler2quat
 import pdb
 import matplotlib.pyplot as plt
 import pickle
@@ -64,8 +64,10 @@ def get_unique_position_deltas(dataname):
     deltas = f['action'][:,:,7:10].reshape(-1,3)
     starts = f['action'][:,:,:3].reshape(-1,3)
     unique_deltas = np.unique(deltas,axis=0)
+    unique_dx = np.unique(deltas[:,0])
+    unique_dy = np.unique(deltas[:,1])
     unique_starts = np.unique(starts,axis=0)
-    return unique_deltas
+    return unique_deltas, unique_dx, unique_dy
 
 def visualize_start_positions(dataname):
     f = h5py.File(dataname, 'r')
@@ -78,7 +80,7 @@ def visualize_start_positions(dataname):
     ax.set_xticks(xticks)
     ax.set_yticks(yticks)
     plt.grid(True)
-    plt.savefig('start_positions.png')
+    plt.savefig(dataname + 'start_positions.png')
     pass
 
 
@@ -89,4 +91,9 @@ unique_dx = np.array([-0.455625,-0.405,-0.3796875,-0.30375,-0.243,-0.2025,-0.151
 unique_dy = np.array([-0.465424,-0.436335,-0.38785332,-0.349068,-0.29089,-0.24933429,-0.232712,-0.19392666,-0.145445,-0.116356,0.,0.116356,0.145445,0.19392666,0.24933429,0.29089,0.349068,0.38785332,0.436335,0.465424])
 x_widths = [0.10125, 0.1215]
 if __name__ == "__main__":
-    visualize_start_positions('/home/dayan/Documents/implicit-iterative-inference/data/robogym/20220419212432RGB1.h5')
+    dataname = '/home/dayan/Documents/docker_share/20220509225239_6objs.h5'
+    #dataname = '/home/dayan/Documents/docker_share/20220509225906_8objs.h5'
+    #visualize_start_positions('/home/dayan/Documents/implicit-iterative-inference/data/robogym/20220419212432RGB1.h5')
+    #visualize_start_positions('/home/dayan/Documents/docker_share/20220509225906_8objs.h5')
+    #visualize_start_positions(dataname)
+    print([len(i) for i in get_unique_position_deltas(dataname)])

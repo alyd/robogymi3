@@ -69,11 +69,11 @@ class MyRearrangeEnv2(
     def initialize(self):
         super().initialize()
         num_objects = self.parameters.simulation_params.num_objects
-        if num_objects > 3:
+        if num_objects > 5:
             delete_meshes=[]
             for meshname, meshfile in self.MESH_FILES.items():
                 mesh=get_combined_mesh(meshfile)
-                threshold = 1.2*np.sqrt(2*num_objects)
+                threshold = 1.3*np.sqrt(2*num_objects)
                 normed_extents = mesh.extents * self.constants.normalized_mesh_size/np.max(mesh.extents)
                 max_breadth = np.sqrt(normed_extents[0]**2+normed_extents[1]**2)
                 if (self.TABLE_WIDTH/(2*max_breadth) < threshold) or (self.TABLE_HEIGHT/(2*max_breadth) < threshold):
@@ -143,6 +143,9 @@ class MyRearrangeEnv2(
     
     def i3reset(self):
         _ = self.reset()
+        while not self.goal_info()[2]['goal']['goal_valid']:
+            print('goal invalid, resetting')
+            _  = self.reset()
         return self.i3observe()
 
     def is_valid_action(self, object_idx, action):
@@ -204,7 +207,7 @@ class MyRearrangeEnv2(
 
     def get_state_data(self):
         pos_state = self.sim.get_state()
-        return (pos_state,self.parameters,self._goal)
+        return deepcopy((pos_state,self.parameters,self._goal))
 
     def save_state(self, path):
         file_pi = open(path, 'wb')
@@ -305,6 +308,7 @@ def my_place_objects_in_grid(
 
     remove_initial_grid_coords = True
     min_cells = n_objects
+    print('num cells : ', n_cells, 'cell width, height:', cell_width, ' ', cell_height )
     if remove_initial_grid_coords:
         min_cells = n_objects*2
     if n_cells < min_cells:
@@ -401,13 +405,10 @@ ObjectStateGoal._sample_next_goal_positions = my_sample_next_goal_positions
 make_env = MyRearrangeEnv2.build
 
 if __name__ == "__main__":
-    make_env_args['starting_seed'] = 14
+    #make_env_args['starting_seed'] = 14
     make_env_args['parameters']["simulation_params"]['num_objects'] = 6
     env = make_env(**make_env_args)
     obs = env.i3reset()
-    while not env.goal_info()[2]['goal']['goal_valid']:
-        print('goal invalid, resetting')
-        obs=env.i3reset()
     import matplotlib.pyplot as plt
     plt.imsave('/share/testresetStart.png',obs[0])
     plt.imsave('/share/testresetGoal.png',obs[1])
@@ -421,6 +422,7 @@ if __name__ == "__main__":
         #assert(action[7:9] in unique_deltas)
         if idx == -2+ make_env_args['parameters']["simulation_params"]['num_objects']:
             env.save_state('/share/test_load_env')
+    pdb.set_trace()
     env2 = make_env(**make_env_args)
     env2.load_pickle_state('/share/test_load_env')
     plt.imsave('/share/test_load_env.png', env2.i3observe()[0])
