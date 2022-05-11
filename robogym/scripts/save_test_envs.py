@@ -22,7 +22,8 @@ logger = logging.getLogger(__name__)
 def main():
     """
         python robogym/scripts/collect_robogym_data.py
-        /share/env_states20220509194443
+        /share/env_states20220509194443 has 3,5,6,8
+        /share/env_states20220510100023 has 4
     """
     # override the default arguments from robogym_wrapper.py
     #make_env_args['starting_seed'] = 15 # 8

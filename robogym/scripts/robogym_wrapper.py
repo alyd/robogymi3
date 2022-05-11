@@ -46,8 +46,7 @@ class MyRearrangeEnv2(
         MeshRearrangeEnvParameters, MeshRearrangeEnvConstants, MeshRearrangeSim,
     ]
 ):
-    MESH_FILES = find_meshes_by_dirname('ycb')
-    MESH_FILES.update(find_meshes_by_dirname('geom'))
+    
     TABLE_WIDTH = 0.6075
     TABLE_HEIGHT = 0.58178
 
@@ -68,12 +67,14 @@ class MyRearrangeEnv2(
 
     def initialize(self):
         super().initialize()
+        self.MESH_FILES = find_meshes_by_dirname('ycb')
+        self.MESH_FILES.update(find_meshes_by_dirname('geom'))
         num_objects = self.parameters.simulation_params.num_objects
-        if num_objects > 5:
+        if num_objects > 4:
             delete_meshes=[]
             for meshname, meshfile in self.MESH_FILES.items():
                 mesh=get_combined_mesh(meshfile)
-                threshold = 1.3*np.sqrt(2*num_objects)
+                threshold = 1.4*np.sqrt(2*num_objects)
                 normed_extents = mesh.extents * self.constants.normalized_mesh_size/np.max(mesh.extents)
                 max_breadth = np.sqrt(normed_extents[0]**2+normed_extents[1]**2)
                 if (self.TABLE_WIDTH/(2*max_breadth) < threshold) or (self.TABLE_HEIGHT/(2*max_breadth) < threshold):
@@ -406,9 +407,10 @@ make_env = MyRearrangeEnv2.build
 
 if __name__ == "__main__":
     #make_env_args['starting_seed'] = 14
-    make_env_args['parameters']["simulation_params"]['num_objects'] = 6
+    make_env_args['parameters']["simulation_params"]['num_objects'] = 5
     env = make_env(**make_env_args)
     obs = env.i3reset()
+    pdb.set_trace()
     import matplotlib.pyplot as plt
     plt.imsave('/share/testresetStart.png',obs[0])
     plt.imsave('/share/testresetGoal.png',obs[1])

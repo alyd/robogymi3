@@ -1,7 +1,7 @@
 import h5py
 import ujson
 import numpy as np
-#from robogym.utils.rotation import euler2quat
+from robogym.utils.rotation import euler2quat
 import pdb
 import matplotlib.pyplot as plt
 import pickle
@@ -83,6 +83,43 @@ def visualize_start_positions(dataname):
     plt.savefig(dataname + 'start_positions.png')
     pass
 
+def reformat_rewards(dataname):
+    f = h5py.File(dataname,'r+')
+    num_timesteps = f['reward'].shape[1]
+    num_rows = f['reward'].shape[0]
+    new_rewards = np.tile(np.arange(num_timesteps),(num_rows,1))
+    f['reward'][:] = new_rewards
+    f['is_terminal'][:] = np.zeros(f['is_terminal'].shape)
+    f.close()
+    pass
+
+def merge_h5files(datanames, mergedname):
+    pdb.set_trace()
+    h5fr = h5py.File(datanames[0],'r')
+    cols = list(h5fr.keys())
+    all_data={}
+    for col in cols:
+        all_data[col] = h5fr[col][:]
+    for h5name in datanames[1:]:
+        h5fr = h5py.File(h5name,'r')
+        for col in cols:
+            print('stacking column ', col)
+            all_data[col] = np.vstack([all_data[col],h5fr[col][:]])
+    with h5py.File(mergedname,mode='w') as h5fw:
+        for col in cols:
+            h5fw[col]=all_data[col]
+
+        
+
+    # with h5py.File(mergedname,mode='w') as h5fw:
+    #     row1 = 0
+    #     for h5name in datanames:
+    #         h5fr = h5py.File(h5name,'r') 
+    #         dset1 = list(h5fr.keys())[0]
+    #         arr_data = h5fr[dset1][:]
+    #         h5fw.require_dataset('alldata', dtype="f",  shape=(50,5), maxshape=(100, 5) )
+    #         h5fw['alldata'][row1:row1+arr_data.shape[0],:] = arr_data[:]
+    #         row1 += arr_data.shape[0]
 
 
 #this is for 'data/robogym/20220419212432RGB1.h5'
@@ -91,9 +128,31 @@ unique_dx = np.array([-0.455625,-0.405,-0.3796875,-0.30375,-0.243,-0.2025,-0.151
 unique_dy = np.array([-0.465424,-0.436335,-0.38785332,-0.349068,-0.29089,-0.24933429,-0.232712,-0.19392666,-0.145445,-0.116356,0.,0.116356,0.145445,0.19392666,0.24933429,0.29089,0.349068,0.38785332,0.436335,0.465424])
 x_widths = [0.10125, 0.1215]
 if __name__ == "__main__":
-    dataname = '/home/dayan/Documents/docker_share/20220509225239_6objs.h5'
+    #dataname = '/home/dayan/Documents/docker_share/20220509225239_6objs.h5'
     #dataname = '/home/dayan/Documents/docker_share/20220509225906_8objs.h5'
     #visualize_start_positions('/home/dayan/Documents/implicit-iterative-inference/data/robogym/20220419212432RGB1.h5')
     #visualize_start_positions('/home/dayan/Documents/docker_share/20220509225906_8objs.h5')
-    #visualize_start_positions(dataname)
-    print([len(i) for i in get_unique_position_deltas(dataname)])
+    
+    dataname='/share/20220419212432RGB1_4objs.h5'
+    visualize_start_positions(dataname)
+    #print([len(i) for i in get_unique_position_deltas(dataname)])
+    # dataname='/share/20220510162221_3objs.h5'
+    # reformat_rewards(dataname)
+    # f = h5py.File(dataname,'r')
+    # print(f['reward'].shape)
+    # print(f['reward'][:3])
+    # print(f['is_terminal'][:3])
+    #dataname='/share/20220419212432RGB1_4objs.h5'
+    # d1='/share/20220510173623_3objs.h5'
+    # d2='/share/20220510173803_5objs.h5'
+    # for dataname in [d1,d2]:
+    #     reformat_rewards(dataname)
+    #     f = h5py.File(dataname,'r')
+    #     print(f['reward'].shape)
+    #     print(f['reward'][:3])
+    #     print(f['is_terminal'][:3])
+    # merge_h5files([d2,'/share/20220510163115_5objs.h5'], '/share/5objs.h5')
+    # f = h5py.File('/share/5objs.h5','r')
+    # print(f['reward'].shape)
+    # plt.imsave('/share/testmergeh5.png',f['image'][0,0,0])
+    # pdb.set_trace()

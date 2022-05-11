@@ -2,7 +2,7 @@ import logging
 
 import numpy as np
 
-config = {'notes':'8 objects', 'n':5000, 'num_objects':8, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14, 'goal_reward':1, }
+config = {'notes':'mesh delete factor = 1.4', 'n':3000, 'num_objects':5, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14, 'goal_reward':1, }
 OUTPUT_DIR = '/share'
 DEBUG = False
 SAVE_h5 = True
@@ -28,7 +28,6 @@ def main():
     """
     # override the default arguments from robogym_wrapper.py
     make_env_args['parameters']["simulation_params"]['num_objects'] = config['num_objects']
-    make_env_args['constants']['vision'] = DEBUG # only needed to check env.observe()['vision_goal'][0]
     make_env_args['constants']['success_reward'] = config['goal_reward']
     #make_env_args['starting_seed'] = 15 # 8
     seqlen = config['num_objects'] + 1
@@ -42,10 +41,7 @@ def main():
         h5 = create_h5(dataname, config, seqlen, make_env_args)
     
         for j in tqdm.tqdm(range(config['n'])):
-            obs=env.reset()
-            while not env.goal_info()[2]['goal']['goal_valid']:
-                print('goal invalid, resetting')
-                obs=env.reset()
+            obs=env.i3reset()
             assert(env.goal_info()[2]['goal']['goal_valid'])
             assert(np.allclose(env.goal_info()[2]['rel_goal_obj_rot'],0,atol=1e-3))
             action = np.zeros(ACTION_SPACE)
@@ -77,10 +73,7 @@ def main():
     
     if DEBUG:
         if not SAVE_h5:
-            obs=env.reset()
-            while not env.goal_info()[2]['goal']['goal_valid']:
-                print('goal invalid, resetting')
-                obs=env.reset()
+            obs=env.i3reset()
             old_qpos = env.mujoco_simulation.qpos.copy()
         env.mujoco_simulation.mj_sim.data.qpos[:] = old_qpos
         env.mujoco_simulation.forward()
