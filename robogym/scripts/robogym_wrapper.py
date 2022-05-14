@@ -10,9 +10,7 @@ from robogym.envs.rearrange.common.mesh import (
     MeshRearrangeEnv,
     MeshRearrangeEnvConstants,
     MeshRearrangeEnvParameters,
-    MeshRearrangeSimParameters,
 )
-from robogym.envs.rearrange.goals.object_state_fixed import ObjectFixedStateGoal
 from robogym.envs.rearrange.simulation.base import ObjectGroupConfig
 from robogym.envs.rearrange.simulation.mesh import MeshRearrangeSim
 from robogym.envs.rearrange.common.utils import find_meshes_by_dirname, get_combined_mesh
@@ -50,39 +48,35 @@ class MyRearrangeEnv2(
     TABLE_WIDTH = 0.6075
     TABLE_HEIGHT = 0.58178
 
-    if False:
-        # Remove the skinny object meshes
-        delete_meshes=[]#'044_flat_screwdriver','042_adjustable_wrench']
-        restrict_meshes={}
-        for meshname, meshfile in MESH_FILES.items():
-            mesh=get_combined_mesh(meshfile)
-            # if max(mesh.extents[0]/mesh.extents[1], mesh.extents[1]/mesh.extents[0])>1.7:
-            #     delete_meshes.append(meshname)  # delete long skinny objects
-            if mesh.extents[2]/max(mesh.extents[0],mesh.extents[1])>1.5:
-                delete_meshes.append(meshname)  # delete tall skinny objects:
-                #restrict_meshes[meshname] = MESH_FILES[meshname]
-        for meshname in delete_meshes:
-            del MESH_FILES[meshname]
-        #MESH_FILES = restrict_meshes
-
     def initialize(self):
         super().initialize()
         self.MESH_FILES = find_meshes_by_dirname('ycb')
         self.MESH_FILES.update(find_meshes_by_dirname('geom'))
         num_objects = self.parameters.simulation_params.num_objects
-        if num_objects > 4:
-            delete_meshes=[]
+        if True:
+            big_meshes=[]
+            small_meshes = []
             for meshname, meshfile in self.MESH_FILES.items():
                 mesh=get_combined_mesh(meshfile)
-                threshold = 1.4*np.sqrt(2*num_objects)
+                #threshold = 1.3*np.sqrt(2*8)# removes 74 meshes, works for 8 objects
+                # threshold = 1.4*np.sqrt(2*num_objects) # 39 meshes, used to collect 5 objects originally
+                max_threshold = 1.2*np.sqrt(2*6) # removes 37 large meshes
+                min_threshold = 0.05 # removes 2 very small meshes
                 normed_extents = mesh.extents * self.constants.normalized_mesh_size/np.max(mesh.extents)
                 max_breadth = np.sqrt(normed_extents[0]**2+normed_extents[1]**2)
-                if (self.TABLE_WIDTH/(2*max_breadth) < threshold) or (self.TABLE_HEIGHT/(2*max_breadth) < threshold):
-                #if (self.TABLE_WIDTH/mesh.extents[0])*(self.TABLE_WIDTH/mesh.extents[1]) < 2*num_objects:
-                    delete_meshes.append(meshname)
-            for meshname in delete_meshes:
+                if (self.TABLE_WIDTH/(2*max_breadth) < max_threshold) or (self.TABLE_HEIGHT/(2*max_breadth) < max_threshold):
+                    big_meshes.append(meshname)
+                elif max_breadth*2 < min_threshold:
+                    small_meshes.append(meshname)
+            # to visualize the deleted mesh files:
+            # new_mesh_files={}
+            # for meshname in small_meshes:
+            #     new_mesh_files[meshname] = self.MESH_FILES[meshname]
+            # self.MESH_FILES = new_mesh_files
+            for meshname in small_meshes + big_meshes:
                 del self.MESH_FILES[meshname]
-            print('choosing from ', len(self.MESH_FILES), ' meshes')
+        print('small meshes: ', small_meshes)
+        print('choosing from ', len(self.MESH_FILES), ' meshes')
            
     def _sample_random_object_groups(
         self, dedupe_objects: bool = False
@@ -92,8 +86,6 @@ class MyRearrangeEnv2(
     def _sample_object_colors(self, num_groups):
         all_colors = np.array([[0,0,1,1],[0,1,0,1],[1,0,0,1],[1,1,0,1],[1,0,1,1],[0,1,1,1],[1,0.5,0,1],[1,0,0.5,1],[0.5,0,1,1],[0,0.5,1,1],[0.5,1,0,1],[0,1,0.5,1],[0.25,0,0.5,1]])#,[0.25,0.5,0,1],[0,0.25,0.5,1],[0.5,0.25,0,1],[0.5,0,0.25,1],[0,0.5,0.25,1]])
         # select a random color from the list of colors
-        #random_color_ids =  self._random_state.randint(0,len(all_colors),num_groups)
-        #random_colors = np.array([all_colors[i] for i in random_color_ids])
         random_color_ids =  self._random_state.choice(len(all_colors), num_groups, replace=False)
         random_colors = all_colors[random_color_ids]
         return random_colors
@@ -163,23 +155,33 @@ class MyRearrangeEnv2(
         if above_min.all() and below_max.all(): # check for collisions
             placements = np.delete(placements,object_idx, axis=0)
             obj_bboxes = np.vstack([np.delete(obj_bboxes,object_idx,axis=0),obj_bboxes[object_idx:object_idx+1]])
-            return _is_valid_proposal(b1_xy[0], b1_xy[1], len(obj_bboxes)-1, obj_bboxes, placements)
+            if _is_valid_proposal(b1_xy[0], b1_xy[1], len(obj_bboxes)-1, obj_bboxes, placements):
+                return True
+            else:
+                print('invalid action, the object would collide with another object')
+                return False
         else:
+            print('invalid action, the object would be off the table')
             return False
     
     def pick_and_place(self, action):
-        reward = 0 
+        done = False 
         obj_positions = self.goal_info()[2]['current_state']['obj_pos'][:,:2]
         success_dist_threshold = self.constants.success_threshold['obj_pos']
-        pick_pos = action[:2]
+        pick_pos, delta_pos = action[:2], action[7:9]
         distances = [np.linalg.norm(obj_pos-pick_pos) for obj_pos in obj_positions]
         closest_obj = np.argmin(distances)
+        print('pick position: ', pick_pos, "delta position: ", delta_pos)
+        print("closest object idx: ", closest_obj, " distance: ", distances[closest_obj])
         if distances[closest_obj] < success_dist_threshold:
             if self.is_valid_action(closest_obj, action):
-                self.mujoco_simulation.mj_sim.data.qpos[8+7*closest_obj:8+7*closest_obj+2] += action[7:9]
+                self.mujoco_simulation.mj_sim.data.qpos[8+7*closest_obj:8+7*closest_obj+2] += delta_pos
                 self.mujoco_simulation.forward()
                 self.update_goal_info()
+
         goal_distances = np.linalg.norm(self.goal_info()[2]['rel_goal_obj_pos'][:,:2],axis=1)
+        if min(goal_distances) < success_dist_threshold:
+            done = True
         reward = sum(goal_distances < success_dist_threshold)
         return reward, False
 
@@ -194,9 +196,6 @@ class MyRearrangeEnv2(
         and one of the 126 possible delta positions
         """
         action = np.zeros(14)
-        #action[7:9] = unique_deltas[np.random.choice(len(unique_deltas),size=1)[0],:]
-        # delta_x = unique_dx[self._random_state.choice(len(unique_dx),size=1)[0]]
-        # delta_y = unique_dy[self._random_state.choice(len(unique_dy),size=1)[0]]
         pos_x_min, pos_x_max, pos_y_min, pos_y_max = get_placement_bounds(self)
         pos_x = self._random_state.uniform(low=pos_x_min,high=pos_x_max)
         pos_y = self._random_state.uniform(low=pos_y_min,high=pos_y_max)
@@ -410,9 +409,9 @@ if __name__ == "__main__":
     make_env_args['parameters']["simulation_params"]['num_objects'] = 5
     env = make_env(**make_env_args)
     obs = env.i3reset()
-    pdb.set_trace()
     import matplotlib.pyplot as plt
     plt.imsave('/share/testresetStart.png',obs[0])
+    pdb.set_trace()
     plt.imsave('/share/testresetGoal.png',obs[1])
     for idx in range(make_env_args['parameters']["simulation_params"]['num_objects']):
         action = compute_action(env, idx)

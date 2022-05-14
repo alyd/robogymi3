@@ -2,7 +2,7 @@ import logging
 
 import numpy as np
 
-config = {'notes':'mesh delete factor = 1.4', 'n':3000, 'num_objects':5, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14, 'goal_reward':1, }
+config = {'notes':'threshold 1.2*np.sqrt(2*6) # 57 meshes', 'n':5000, 'num_objects':5, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14, 'goal_reward':1, }
 OUTPUT_DIR = '/share'
 DEBUG = False
 SAVE_h5 = True
@@ -25,6 +25,9 @@ logger = logging.getLogger(__name__)
 def main():
     """
         python robogym/scripts/collect_robogym_data.py
+        20 meshes threshold = 1.3*np.sqrt(2*8) small enough for 8 objects, 4 obj dataset: 20220511113454_4objs.h5 (stopped halfway)
+        57 meshes threshold 1.2*np.sqrt(12) 5obj dataset: 20220511132512_5objs.h5
+        39 meshes threshold = 1.4*np.sqrt(10) 5obj dataset: implicit-iterative-inference/data/robogym/5objs.h5 (stopped at 80%)
     """
     # override the default arguments from robogym_wrapper.py
     make_env_args['parameters']["simulation_params"]['num_objects'] = config['num_objects']
@@ -45,14 +48,13 @@ def main():
             assert(env.goal_info()[2]['goal']['goal_valid'])
             assert(np.allclose(env.goal_info()[2]['rel_goal_obj_rot'],0,atol=1e-3))
             action = np.zeros(ACTION_SPACE)
-            reward, done = 0, False
             goal_qpos = env.goal_info()[2]['goal']['qpos_goal'].copy()
             h5['image'][j, 0] = render_env(env, config)
             h5['action'][j, 0] = action
-            h5['reward'][j, 0] = reward
+            h5['reward'][j, 0] = 0
             h5['is_first'][j, 0] = True
             h5['is_last'][j, 0] = False
-            h5['is_terminal'][j, 0] = done
+            h5['is_terminal'][j, 0] = False
 
             # Place each object one by one:
             for idx in range(config['num_objects']):
@@ -64,10 +66,10 @@ def main():
                 env.update_goal_info()
                 h5['image'][j, t] = render_env(env, config)
                 h5['action'][j, t] = action
-                h5['reward'][j, t] = config['goal_reward']*is_last
+                h5['reward'][j, t] = t
                 h5['is_first'][j, t] = False
                 h5['is_last'][j, t] = is_last
-                h5['is_terminal'][j, t] = is_last
+                h5['is_terminal'][j, t] = False
             h5['goal'][j] = h5['image'][j, t].copy()
         print(f'saved to {dataname}')
     

@@ -24,7 +24,7 @@ def create_h5(dataname, cfg, seqlen, make_env_args):
 
     h5.attrs['cfg'] = ujson.dumps(cfg)
     h5.attrs['make_env_args'] = ujson.dumps(make_env_args)
-    h5.attrs['max_reward'] = 0.004  # or is it slightly higher than this? The max I got was 0.00401846
+    h5.attrs['max_reward'] = 1.0
     # h5.attrs['action_space'] = act_space.shape
     # h5.attrs['observation_space'] = obs_space.shape[-3:]
     return h5
