@@ -9,6 +9,9 @@ docker run --gpus all -d --user 0 --rm --name collect_data \
 
 # set up implicit-iterative-inference when inside the docker image:
 conda create --name roboimp --clone base
+
 conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch
+
 cd implicit-iterative-inference
+
 pip install -r requirements.txt
