@@ -1,3 +1,5 @@
+import sys
+sys.path.append("robogym/scripts")
 import robogym_wrapper as rw
 import pickle
 import utils
