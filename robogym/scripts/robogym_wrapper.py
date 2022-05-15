@@ -75,7 +75,6 @@ class MyRearrangeEnv2(
             # self.MESH_FILES = new_mesh_files
             for meshname in small_meshes + big_meshes:
                 del self.MESH_FILES[meshname]
-        print('small meshes: ', small_meshes)
         print('choosing from ', len(self.MESH_FILES), ' meshes')
            
     def _sample_random_object_groups(
