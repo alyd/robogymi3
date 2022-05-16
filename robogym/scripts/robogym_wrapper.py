@@ -52,10 +52,10 @@ class MyRearrangeEnv2(
         super().initialize()
         self.MESH_FILES = find_meshes_by_dirname('ycb')
         self.MESH_FILES.update(find_meshes_by_dirname('geom'))
-        num_objects = self.parameters.simulation_params.num_objects
         if True:
             big_meshes=[]
             small_meshes = []
+            thin_meshes=[]#'044_flat_screwdriver','042_adjustable_wrench']
             for meshname, meshfile in self.MESH_FILES.items():
                 mesh=get_combined_mesh(meshfile)
                 #threshold = 1.3*np.sqrt(2*8)# removes 74 meshes, works for 8 objects
@@ -69,12 +69,17 @@ class MyRearrangeEnv2(
                 elif max_breadth*2 < min_threshold:
                     small_meshes.append(meshname)
             # to visualize the deleted mesh files:
-            # new_mesh_files={}
-            # for meshname in small_meshes:
-            #     new_mesh_files[meshname] = self.MESH_FILES[meshname]
-            # self.MESH_FILES = new_mesh_files
-            for meshname in small_meshes + big_meshes:
-                del self.MESH_FILES[meshname]
+            viz_meshes = big_meshes
+            if viz_meshes is not None:
+                print(viz_meshes)
+                print(len(viz_meshes))
+                new_mesh_files={}
+                for meshname in viz_meshes:
+                    new_mesh_files[meshname] = self.MESH_FILES[meshname]
+                self.MESH_FILES = new_mesh_files
+            else:
+                for meshname in small_meshes + big_meshes:
+                    del self.MESH_FILES[meshname]
         print('choosing from ', len(self.MESH_FILES), ' meshes')
            
     def _sample_random_object_groups(
@@ -182,7 +187,7 @@ class MyRearrangeEnv2(
         if min(goal_distances) < success_dist_threshold:
             done = True
         reward = sum(goal_distances < success_dist_threshold)
-        return reward, False
+        return reward, done
 
     def i3step(self, action):
         reward, done = self.pick_and_place(action)
@@ -235,6 +240,19 @@ class MyRearrangeEnv2(
         self.load_state(env_state)
         file_pi.close()
         pass
+
+#make_env = MyRearrangeEnv2.build
+
+def make_env(make_env_args, max_moves_required):
+    env = MyRearrangeEnv2.build(**make_env_args)
+    num_unchanged_objs = make_env_args['parameters']["simulation_params"]['num_objects'] - max_moves_required
+    for obj_id in range(num_unchanged_objs):
+        action = compute_action(env, obj_id)
+        _ = env.pick_and_place(action)
+    goal_distances = np.linalg.norm(self.goal_info()[2]['rel_goal_obj_pos'][:,:2],axis=1)
+    assert(sum(goal_distances < 0.001)==num_unchanged_objs)
+    return env
+        
       
 from robogym.envs.rearrange.goals.object_state import ObjectStateGoal
 
@@ -401,7 +419,6 @@ def my_sample_next_goal_positions(self, random_state):
 
 ObjectStateGoal._sample_next_goal_positions = my_sample_next_goal_positions
 
-make_env = MyRearrangeEnv2.build
 
 if __name__ == "__main__":
     #make_env_args['starting_seed'] = 14
