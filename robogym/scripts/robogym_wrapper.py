@@ -68,6 +68,8 @@ class MyRearrangeEnv2(
                     big_meshes.append(meshname)
                 elif max_breadth*2 < min_threshold:
                     small_meshes.append(meshname)
+                elif max(mesh.extents[0]/mesh.extents[1], mesh.extents[1]/mesh.extents[0])>1.7:
+                    thin_meshes.append(meshname)  # delete long skinny objects
             # to visualize the deleted mesh files:
             viz_meshes = big_meshes
             if viz_meshes is not None:
@@ -78,7 +80,7 @@ class MyRearrangeEnv2(
                     new_mesh_files[meshname] = self.MESH_FILES[meshname]
                 self.MESH_FILES = new_mesh_files
             else:
-                for meshname in small_meshes + big_meshes:
+                for meshname in small_meshes + big_meshes + thin_meshes:
                     del self.MESH_FILES[meshname]
         print('choosing from ', len(self.MESH_FILES), ' meshes')
            
@@ -241,17 +243,18 @@ class MyRearrangeEnv2(
         file_pi.close()
         pass
 
-#make_env = MyRearrangeEnv2.build
+make_env = MyRearrangeEnv2.build
 
-def make_env(make_env_args, max_moves_required):
-    env = MyRearrangeEnv2.build(**make_env_args)
-    num_unchanged_objs = make_env_args['parameters']["simulation_params"]['num_objects'] - max_moves_required
-    for obj_id in range(num_unchanged_objs):
-        action = compute_action(env, obj_id)
-        _ = env.pick_and_place(action)
-    goal_distances = np.linalg.norm(self.goal_info()[2]['rel_goal_obj_pos'][:,:2],axis=1)
-    assert(sum(goal_distances < 0.001)==num_unchanged_objs)
-    return env
+# WIP:
+# def make_env(make_env_args, max_moves_required):
+#     env = MyRearrangeEnv2.build(**make_env_args)
+#     num_unchanged_objs = make_env_args['parameters']["simulation_params"]['num_objects'] - max_moves_required
+#     for obj_id in range(num_unchanged_objs):
+#         action = compute_action(env, obj_id)
+#         _ = env.pick_and_place(action)
+#     goal_distances = np.linalg.norm(self.goal_info()[2]['rel_goal_obj_pos'][:,:2],axis=1)
+#     assert(sum(goal_distances < 0.001)==num_unchanged_objs)
+#     return env
         
       
 from robogym.envs.rearrange.goals.object_state import ObjectStateGoal
@@ -422,7 +425,7 @@ ObjectStateGoal._sample_next_goal_positions = my_sample_next_goal_positions
 
 if __name__ == "__main__":
     #make_env_args['starting_seed'] = 14
-    make_env_args['parameters']["simulation_params"]['num_objects'] = 5
+    make_env_args['parameters']["simulation_params"]['num_objects'] = 4
     env = make_env(**make_env_args)
     obs = env.i3reset()
     import matplotlib.pyplot as plt
