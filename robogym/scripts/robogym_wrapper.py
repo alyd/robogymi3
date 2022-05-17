@@ -144,7 +144,7 @@ class MyRearrangeEnv2(
     # in implicit-iterative-inference
     def i3observe(self):
         current_image = render_env(self)
-        goal_image = self.observe()['vision_goal'][0]
+        goal_image = self.observe()['vision_goal'][0]/255.0
         return current_image, goal_image
     
     def i3reset(self):
@@ -436,6 +436,7 @@ if __name__ == "__main__":
     env = make_env(**make_env_args)
     obs = env.i3reset()
     import matplotlib.pyplot as plt
+    plt.imsave('/share/meshes/testresetStart.png',obs[0])
     if VIZ_MESH_NAMES is not None:
         plt.imsave('/share/meshes/'+str(VIZ_MESH_NAMES)+'.png',obs[0])
     plt.imsave('/share/testresetGoal.png',obs[1])
