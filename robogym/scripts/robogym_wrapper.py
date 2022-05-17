@@ -35,7 +35,7 @@ make_env_args = {
                     {'obj_pos': 0.1}, "goal_reward_per_object":1.0},
         "parameters": {
             "n_random_initial_steps": 0,
-            "simulation_params": {"num_objects": 4, 'mesh_scale':1.9, 'used_table_portion': 1.0,
+            "simulation_params": {"num_objects": 4, 'mesh_scale':1.5, 'used_table_portion': 1.0,
             "camera_fovy_radius": 0.0},
         },
     }
@@ -436,7 +436,7 @@ if __name__ == "__main__":
     env = make_env(**make_env_args)
     obs = env.i3reset()
     import matplotlib.pyplot as plt
-    plt.imsave('/share/meshes/testresetStart.png',obs[0])
+    plt.imsave('/share/testresetStart.png',obs[0])
     if VIZ_MESH_NAMES is not None:
         plt.imsave('/share/meshes/'+str(VIZ_MESH_NAMES)+'.png',obs[0])
     plt.imsave('/share/testresetGoal.png',obs[1])
