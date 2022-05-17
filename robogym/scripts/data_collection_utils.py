@@ -144,6 +144,9 @@ if __name__ == "__main__":
     #visualize_start_positions('/home/dayan/Documents/docker_share/20220509225906_8objs.h5')
     
     dataname='/share/20220419212432RGB1_4objs.h5'
+    dataname='/share/20220516170912_4objs.h5'
+    f = h5py.File(dataname, 'r')
+    plt.imsave('/share/testh5.png',f['image'][-1,0,0])
     visualize_start_positions(dataname)
     #print([len(i) for i in get_unique_position_deltas(dataname)])
     # dataname='/share/20220510162221_3objs.h5'

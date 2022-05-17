@@ -51,6 +51,10 @@ class MyRearrangeEnv2(
 
     def initialize(self):
         super().initialize()
+        self.task = lambda: None
+        setattr(self.task,'max_moves_required', self.parameters.simulation_params.num_objects)
+        self.num_constraints = self.parameters.simulation_params.num_objects
+        self.num_objects = self.parameters.simulation_params.num_objects
         self.MESH_FILES = find_meshes_by_dirname('ycb')
         self.MESH_FILES.update(find_meshes_by_dirname('geom'))
         if True:
@@ -64,18 +68,16 @@ class MyRearrangeEnv2(
                 #max_threshold = 1.2*np.sqrt(2*6) # removes 37 large meshes
                 #min_threshold=0.05 # removes 2 very small meshes
                 min_threshold = 0.1 #to collect data faster, use min threshold 0.13 and scale 1.8
+                skinny_threshold = 1.4
                 normed_extents = mesh.extents * self.constants.normalized_mesh_size/np.max(mesh.extents)
                 max_breadth = np.sqrt(normed_extents[0]**2+normed_extents[1]**2)
-                if max(mesh.extents[0]/mesh.extents[1], mesh.extents[1]/mesh.extents[0])>1.4:
+                if max(mesh.extents[0]/mesh.extents[1], mesh.extents[1]/mesh.extents[0])>skinny_threshold:
                     thin_meshes.append(meshname)  # delete long skinny objects
                 elif max_breadth*2 < min_threshold:
                     small_meshes.append(meshname)
                 # elif (self.TABLE_WIDTH/(2*max_breadth) < max_threshold) or (self.TABLE_HEIGHT/(2*max_breadth) < max_threshold):
                 #     big_meshes.append(meshname)
             # to visualize the deleted mesh files:
-            print(small_meshes)
-            print(len(small_meshes))
-            #['002_master_chef_can', '073-b_lego_duplo', '073-f_lego_duplo', '052_extra_large_clamp', '070-a_colored_wood_blocks', '025_mug']
             viz_meshes = VIZ_MESH_NAMES
             if viz_meshes is not None:
                 print(viz_meshes)
@@ -191,7 +193,7 @@ class MyRearrangeEnv2(
                 self.update_goal_info()
 
         goal_distances = np.linalg.norm(self.goal_info()[2]['rel_goal_obj_pos'][:,:2],axis=1)
-        if min(goal_distances) < success_dist_threshold:
+        if max(goal_distances) < success_dist_threshold:
             done = True
         reward = sum(goal_distances < success_dist_threshold)
         return reward, done
