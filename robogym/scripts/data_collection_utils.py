@@ -39,7 +39,7 @@ def compute_action(env, obj_idx):
     src_orient = euler2quat(current_state['obj_rot'][obj_idx])
     # get target object state
     delta_pos = env_info['rel_goal_obj_pos'][obj_idx]
-    assert(((src_pos+delta_pos)==env.goal_info()[2]['goal']['qpos_goal'][8+7*obj_idx:8+7*obj_idx+3]).all())
+    assert(np.isclose(src_pos+delta_pos, env.goal_info()[2]['goal']['qpos_goal'][8+7*obj_idx:8+7*obj_idx+3],atol=1e-4).all())
     delta_orient = euler2quat(env_info['rel_goal_obj_rot'][obj_idx])
     action = np.concatenate((src_pos, src_orient, delta_pos, delta_orient))
     return action
@@ -109,6 +109,16 @@ def merge_h5files(datanames, mergedname):
         for col in cols:
             h5fw[col]=all_data[col]
 
+from robogym.envs.rearrange.common.utils import find_meshes_by_dirname, get_combined_mesh
+
+# def visualize_meshes(meshname_list):
+#     all_mesh_files = find_meshes_by_dirname('ycb')
+#     all_mesh_files.update(find_meshes_by_dirname('geom'))
+#     env = make_env()
+#     for meshname in meshname_list:
+#         new_mesh_files={}
+#         new_mesh_files[meshname] = all_mesh_files[meshname]
+#     env.MESH_FILES = new_mesh_files
         
 
     # with h5py.File(mergedname,mode='w') as h5fw:

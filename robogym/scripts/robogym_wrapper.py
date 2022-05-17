@@ -22,6 +22,7 @@ from data_collection_utils import render_env, unique_deltas, unique_dx, unique_d
 import pdb
 logger = logging.getLogger(__name__)
 
+VIZ_MESH_NAMES = None#['009_gelatin_box','050_medium_clamp'] #['002_master_chef_can', '073-f_lego_duplo']
  # with stabilization, the initial and goal objects got stabilized differently, 
 # causing an undesired rotation between start and goal state. thus I disabled "stabilize_objects"
 make_env_args = {
@@ -34,7 +35,7 @@ make_env_args = {
                     {'obj_pos': 0.1}, "goal_reward_per_object":1.0},
         "parameters": {
             "n_random_initial_steps": 0,
-            "simulation_params": {"num_objects": 4, 'mesh_scale':1.5, 'used_table_portion': 1.0,
+            "simulation_params": {"num_objects": 4, 'mesh_scale':1.9, 'used_table_portion': 1.0,
             "camera_fovy_radius": 0.0},
         },
     }
@@ -55,23 +56,27 @@ class MyRearrangeEnv2(
         if True:
             big_meshes=[]
             small_meshes = []
-            thin_meshes=[]#'044_flat_screwdriver','042_adjustable_wrench']
+            thin_meshes=['044_flat_screwdriver']
             for meshname, meshfile in self.MESH_FILES.items():
                 mesh=get_combined_mesh(meshfile)
                 #threshold = 1.3*np.sqrt(2*8)# removes 74 meshes, works for 8 objects
                 # threshold = 1.4*np.sqrt(2*num_objects) # 39 meshes, used to collect 5 objects originally
-                max_threshold = 1.2*np.sqrt(2*6) # removes 37 large meshes
-                min_threshold = 0.05 # removes 2 very small meshes
+                #max_threshold = 1.2*np.sqrt(2*6) # removes 37 large meshes
+                #min_threshold=0.05 # removes 2 very small meshes
+                min_threshold = 0.1 #to collect data faster, use min threshold 0.13 and scale 1.8
                 normed_extents = mesh.extents * self.constants.normalized_mesh_size/np.max(mesh.extents)
                 max_breadth = np.sqrt(normed_extents[0]**2+normed_extents[1]**2)
-                if (self.TABLE_WIDTH/(2*max_breadth) < max_threshold) or (self.TABLE_HEIGHT/(2*max_breadth) < max_threshold):
-                    big_meshes.append(meshname)
+                if max(mesh.extents[0]/mesh.extents[1], mesh.extents[1]/mesh.extents[0])>1.4:
+                    thin_meshes.append(meshname)  # delete long skinny objects
                 elif max_breadth*2 < min_threshold:
                     small_meshes.append(meshname)
-                elif max(mesh.extents[0]/mesh.extents[1], mesh.extents[1]/mesh.extents[0])>1.7:
-                    thin_meshes.append(meshname)  # delete long skinny objects
+                # elif (self.TABLE_WIDTH/(2*max_breadth) < max_threshold) or (self.TABLE_HEIGHT/(2*max_breadth) < max_threshold):
+                #     big_meshes.append(meshname)
             # to visualize the deleted mesh files:
-            viz_meshes = big_meshes
+            print(small_meshes)
+            print(len(small_meshes))
+            #['002_master_chef_can', '073-b_lego_duplo', '073-f_lego_duplo', '052_extra_large_clamp', '070-a_colored_wood_blocks', '025_mug']
+            viz_meshes = VIZ_MESH_NAMES
             if viz_meshes is not None:
                 print(viz_meshes)
                 print(len(viz_meshes))
@@ -80,7 +85,7 @@ class MyRearrangeEnv2(
                     new_mesh_files[meshname] = self.MESH_FILES[meshname]
                 self.MESH_FILES = new_mesh_files
             else:
-                for meshname in small_meshes + big_meshes + thin_meshes:
+                for meshname in small_meshes + thin_meshes:
                     del self.MESH_FILES[meshname]
         print('choosing from ', len(self.MESH_FILES), ' meshes')
            
@@ -429,9 +434,10 @@ if __name__ == "__main__":
     env = make_env(**make_env_args)
     obs = env.i3reset()
     import matplotlib.pyplot as plt
-    plt.imsave('/share/testresetStart.png',obs[0])
-    pdb.set_trace()
+    if VIZ_MESH_NAMES is not None:
+        plt.imsave('/share/meshes/'+str(VIZ_MESH_NAMES)+'.png',obs[0])
     plt.imsave('/share/testresetGoal.png',obs[1])
+    pdb.set_trace()
     for idx in range(make_env_args['parameters']["simulation_params"]['num_objects']):
         action = compute_action(env, idx)
         assert(np.allclose(min(np.abs(action[7]-unique_dx)),0,atol=1e-5) and np.allclose(min(abs(action[8]-unique_dy)),0,atol=1e-5))

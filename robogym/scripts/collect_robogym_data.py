@@ -2,7 +2,7 @@ import logging
 
 import numpy as np
 
-config = {'notes':'threshold 1.2*np.sqrt(2*6) # 57 meshes', 'n':5000, 'num_objects':5, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14, 'goal_reward':1, }
+config = {'notes':'60 meshes scale 1.9, small 0.1, thin 1.4', 'n':1000, 'num_objects':4, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14, 'goal_reward':1, }
 OUTPUT_DIR = '/share'
 DEBUG = False
 SAVE_h5 = True
