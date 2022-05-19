@@ -52,9 +52,12 @@ class MyRearrangeEnv2(
     def initialize(self):
         super().initialize()
         self.task = lambda: None
-        setattr(self.task,'max_moves_required', self.parameters.simulation_params.num_objects)
-        self.num_constraints = self.parameters.simulation_params.num_objects
         self.num_objects = self.parameters.simulation_params.num_objects
+        self.num_constraints = self.num_objects #TODO: partial goals
+        if self.num_objects < 6:
+            setattr(self.task,'max_moves_required', self.num_objects)
+        else:
+            setattr(self.task,'max_moves_required', 4)
         self.MESH_FILES = find_meshes_by_dirname('ycb')
         self.MESH_FILES.update(find_meshes_by_dirname('geom'))
         if False:
@@ -338,7 +341,7 @@ def my_place_objects_in_grid(
     if n_objects < 6 or len(initial_placements)==0:
         n_goals_to_place = n_objects
     else: # with more than 5 objects, we will only have 4 goal objects in a different location
-        n_goals_to_place = n_objects - 4
+        n_goals_to_place = 4
     if n_cells < n_objects + n_goals_to_place:
         # Cannot find a valid placement via this method; give up.
         logging.warning(
