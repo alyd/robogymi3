@@ -57,7 +57,7 @@ class MyRearrangeEnv2(
         self.num_objects = self.parameters.simulation_params.num_objects
         self.MESH_FILES = find_meshes_by_dirname('ycb')
         self.MESH_FILES.update(find_meshes_by_dirname('geom'))
-        if True:
+        if False:
             big_meshes=[]
             small_meshes = []
             thin_meshes=['044_flat_screwdriver']
@@ -333,25 +333,24 @@ def my_place_objects_in_grid(
     cell_width = width / n_columns
     cell_height = height / n_rows
 
-    remove_initial_grid_coords = True
-    min_cells = n_objects
     print('num cells : ', n_cells, 'cell width, height:', cell_width, ' ', cell_height )
-    if remove_initial_grid_coords:
-        min_cells = n_objects*2
-    if n_cells < min_cells:
+    
+    if n_objects < 6 or len(initial_placements)==0:
+        n_goals_to_place = n_objects
+    else: # with more than 5 objects, we will only have 4 goal objects in a different location
+        n_goals_to_place = n_objects - 4
+    if n_cells < n_objects + n_goals_to_place:
         # Cannot find a valid placement via this method; give up.
         logging.warning(
-            f"Unable to fit {n_objects} objects into placement area with {n_cells} cells"
+            f"Can't fit {n_objects} initial objects & {n_goals_to_place} extra goal objects into placement area with {n_cells} cells"
         )
         return np.zeros(shape=(n_objects, 3)), False
-
-    
     # 2. Initialize an array with all valid cell coordinates.
     # Create an array of shape (n_rows, n_columns, 2) where each element contains the row,col
     # coord
     valid_coords = np.dstack(np.mgrid[0:n_rows, 0:n_columns])
     valid_coords = np.reshape(valid_coords, (n_rows * n_columns, 2))
-    if len(initial_placements)>0 and remove_initial_grid_coords:
+    if len(initial_placements)>0:
         initial_coords = [_get_local_coords(initial_placements[idx], object_bounding_boxes[idx], cell_width, cell_height) for idx in range(n_objects)]
         valid_coords = np.delete(valid_coords, [n_columns*ic[0]+ic[1] for ic in initial_coords], 0)
     for trial_i in range(max_num_trials):
@@ -366,20 +365,12 @@ def my_place_objects_in_grid(
         # 3. Place each object into a randomly selected cell.
         object_bounding_boxes_including_initial = np.vstack([object_bounding_boxes, object_bounding_boxes])
 
-        for object_idx in range(n_objects):
+        for object_idx in range(n_goals_to_place):
             row, col = coords.pop()
             pos, size = object_bounding_boxes[object_idx]
 
             prop_x = cell_width * col + size[0] - pos[0] 
             prop_y = cell_height * row + size[1] - pos[1]
-            #add some jitter
-            # jitterx = np.random.uniform(low=-cell_width*0.1*(col==0), high=cell_width*0.1*(col==n_columns-1))
-            # jittery = np.random.uniform(low=-cell_height*0.1*(row==0), high=cell_height*0.1*(row==n_rows-1))
-            # js=0.2 # cell width and height is around 0.2
-            # jitterx = np.random.uniform(low=-cell_width*js, high=cell_width*js)
-            # jittery = np.random.uniform(low=-cell_height*js, high=cell_height*js)
-            # prop_x = min(cell_width*(n_columns-1) + size[0] - pos[0], max(size[0] - pos[0], prop_x + jitterx))
-            # prop_y = min(cell_height*(n_rows-1) + size[1] - pos[1], max(size[1] - pos[1], prop_y + jittery))
 
             # Reference is to (xmin, ymin, zmin) of table.
             prop_z = object_bounding_boxes[object_idx, 1, -1] + 2 * table_size[-1]
@@ -398,7 +389,7 @@ def my_place_objects_in_grid(
                 break
 
             placements.append(placement)
-        placements = placements[len(initial_placements):]
+        placements = placements[len(initial_placements):] + placements[n_goals_to_place:n_objects]
         if placement_valid:
             assert (
                 len(placements) == n_objects
@@ -432,7 +423,7 @@ ObjectStateGoal._sample_next_goal_positions = my_sample_next_goal_positions
 
 if __name__ == "__main__":
     #make_env_args['starting_seed'] = 14
-    make_env_args['parameters']["simulation_params"]['num_objects'] = 4
+    make_env_args['parameters']["simulation_params"]['num_objects'] = 7
     env = make_env(**make_env_args)
     obs = env.i3reset()
     import matplotlib.pyplot as plt

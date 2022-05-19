@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 def main():
     """
         python robogym/scripts/collect_robogym_data.py
+        1000 examples, scale 1.9 60 meshes 4 objects  /share/h5s/20220516170912_4objs.h5
+        4000 examples, scale 1.9 60 meshes 4 objects /share/20220517095306_4objs
         20 meshes threshold = 1.3*np.sqrt(2*8) small enough for 8 objects, 4 obj dataset: 20220511113454_4objs.h5 (stopped halfway)
         57 meshes threshold 1.2*np.sqrt(12) 5obj dataset: 20220511132512_5objs.h5
         39 meshes threshold = 1.4*np.sqrt(10) 5obj dataset: implicit-iterative-inference/data/robogym/5objs.h5 (stopped at 80%)

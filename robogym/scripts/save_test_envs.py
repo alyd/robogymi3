@@ -2,7 +2,7 @@ import logging
 
 import numpy as np
 
-config = {'notes':'60 meshes scale 1.9, small 0.1, thin 1.4', 'n':200, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14,}
+config = {'object_nums':[3,4,5,6,7,8], 'notes':'all 94 meshes, 6-8 have 4 satisfied goals', 'scale':1.5, 'n':200, 'image_size':256, 'camera':'vision_cam_top', 'action_space':14,}
 OUTPUT_DIR = '/share'
 DEBUG = False
 
@@ -23,9 +23,13 @@ def main():
     """
         python robogym/scripts/save_test_envs.py
         /share/env_states20220509194443 has 3,5,6,8
-        /share/env_states20220510100023 has 4
+        /share/env_states20220510100023 has 100 states, 4 objects of all meshes, scale 1.5
+        /share/env_states20220517161902 has 500 states, 4 objects of all meshes, scale 1.5
+        /share/env_states20220518141617 has 200 states, 6 objects "" ""
+        /share/env_states20220519140414 has 200 states each, 3,4,5,6,7,8 objects of all objects, scale 1.5, 6-8 have 4 goals satisfied
         /share/env_states..2222 has 3,4,5,6 objects, 55 meshes
         env_states_scale19_bigmeshes has 4 objects, 60 meshes (no skinny or small, scale 1.9)
+        
     """
     # override the default arguments from robogym_wrapper.py
     #make_env_args['starting_seed'] = 15 # 8
@@ -33,9 +37,9 @@ def main():
     if DEBUG:
         dataname = dataname + 'debug'
     print(f'Writing to {dataname}...')
-    states = {'min':0.05, 'max':1.2*np.sqrt(12), 'num_meshes':55, 'notes': 'same set of meshes for all numbers of objects'}
-    all_object_nums = [4]
-    for object_num in all_object_nums:
+    states = {'scale':config['scale'], 'notes': config['notes']}
+    
+    for object_num in config['object_nums']:
         states[object_num] = []
         make_env_args['parameters']["simulation_params"]['num_objects'] = object_num
         env = make_env(**make_env_args)
