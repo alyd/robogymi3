@@ -14,11 +14,12 @@ from robogym.envs.rearrange.common.mesh import (
 from robogym.envs.rearrange.simulation.base import ObjectGroupConfig
 from robogym.envs.rearrange.simulation.mesh import MeshRearrangeSim
 from robogym.envs.rearrange.common.utils import find_meshes_by_dirname, get_combined_mesh
+from robogym.mujoco.mujoco_xml import ASSETS_DIR
 from robogym.observation.common import SyncType
 from robogym.envs.rearrange.common.utils import _is_valid_proposal
 
 from data_collection_utils import render_env, unique_deltas, unique_dx, unique_dy, compute_action, get_placement_bounds
-
+import matplotlib.pyplot as plt
 import pdb
 logger = logging.getLogger(__name__)
 
@@ -236,7 +237,10 @@ class MyRearrangeEnv2(
         params = state[1]
         goal = state[2]
         self.constants.normalize_mesh = False
-        self._set_object_groups(deepcopy(params.simulation_params.object_groups))
+        obj_groups = deepcopy(params.simulation_params.object_groups)
+        for group in obj_groups:
+            group.mesh_files = [ASSETS_DIR + mesh_file.split('assets')[1] for mesh_file in group.mesh_files]
+        self._set_object_groups(obj_groups)
         self._goal = goal
         self._recreate_sim()
         self._apply_object_colors()
@@ -426,29 +430,30 @@ ObjectStateGoal._sample_next_goal_positions = my_sample_next_goal_positions
 
 if __name__ == "__main__":
     #make_env_args['starting_seed'] = 14
-    make_env_args['parameters']["simulation_params"]['num_objects'] = 7
-    env = make_env(**make_env_args)
-    obs = env.i3reset()
-    import matplotlib.pyplot as plt
-    plt.imsave('/share/testresetStart.png',obs[0])
-    if VIZ_MESH_NAMES is not None:
-        plt.imsave('/share/meshes/'+str(VIZ_MESH_NAMES)+'.png',obs[0])
-    plt.imsave('/share/testresetGoal.png',obs[1])
-    pdb.set_trace()
-    for idx in range(make_env_args['parameters']["simulation_params"]['num_objects']):
-        action = compute_action(env, idx)
-        assert(np.allclose(min(np.abs(action[7]-unique_dx)),0,atol=1e-5) and np.allclose(min(abs(action[8]-unique_dy)),0,atol=1e-5))
-        assert(env.is_valid_action(idx, action))
-        next_obs, reward, done, info = env.i3step(action)
-        assert reward == idx+1
-        plt.imsave('/share/testAction'+str(idx)+'.png',next_obs[0])
-        #assert(action[7:9] in unique_deltas)
-        if idx == -2+ make_env_args['parameters']["simulation_params"]['num_objects']:
-            env.save_state('/share/test_load_env')
-    pdb.set_trace()
+    #make_env_args['parameters']["simulation_params"]['num_objects'] = 3
+    # env = make_env(**make_env_args)
+    # obs = env.i3reset()
+
+    # plt.imsave('/home/dayan/Documents/docker_share/testresetStart.png',obs[0])
+    # if VIZ_MESH_NAMES is not None:
+    #     plt.imsave('/home/dayan/Documents/docker_share/meshes/'+str(VIZ_MESH_NAMES)+'.png',obs[0])
+    # plt.imsave('/home/dayan/Documents/docker_share/testresetGoal.png',obs[1])
+    # pdb.set_trace()
+    # for idx in range(make_env_args['parameters']["simulation_params"]['num_objects']):
+    #     action = compute_action(env, idx)
+    #     assert(np.allclose(min(np.abs(action[7]-unique_dx)),0,atol=1e-5) and np.allclose(min(abs(action[8]-unique_dy)),0,atol=1e-5))
+    #     assert(env.is_valid_action(idx, action))
+    #     next_obs, reward, done, info = env.i3step(action)
+    #     assert reward == idx+1
+    #     plt.imsave('/share/testAction'+str(idx)+'.png',next_obs[0])
+    #     #assert(action[7:9] in unique_deltas)
+    #     if idx == -2+ make_env_args['parameters']["simulation_params"]['num_objects']:
+    #         env.save_state('/share/test_load_env')
+    # pdb.set_trace()
+    make_env_args['parameters']["simulation_params"]['num_objects'] = 6
     env2 = make_env(**make_env_args)
-    env2.load_pickle_state('/share/test_load_env')
-    plt.imsave('/share/test_load_env.png', env2.i3observe()[0])
+    env2.load_pickle_state('/home/dayan/Documents/docker_share/test_load_env')
+    plt.imsave('/home/dayan/Documents/docker_share/test_load_env.png', env2.i3observe()[0])
     test_action = compute_action(env2, idx)
     assert np.allclose(test_action, action)
     test_obs, reward, done, info = env2.i3step(action)

@@ -26,7 +26,7 @@ def main():
         /share/env_states20220510100023 has 100 states, 4 objects of all meshes, scale 1.5
         /share/env_states20220517161902 has 500 states, 4 objects of all meshes, scale 1.5
         /share/env_states20220518141617 has 200 states, 6 objects "" ""
-        /share/env_states202205191517?? has 200 states each, 3,4,5,6,7,8 objects of all objects, scale 1.5, 6-8 have 4 goals unsatisfied
+        /share/env_states20220519151709 has 200 states each, 3,4,5,6,7,8 objects of all objects, scale 1.5, 6-8 have 4 goals unsatisfied
         /share/env_states..2222 has 3,4,5,6 objects, 55 meshes
         env_states_scale19_bigmeshes has 4 objects, 60 meshes (no skinny or small, scale 1.9)
         
