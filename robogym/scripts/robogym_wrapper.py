@@ -35,7 +35,7 @@ MAKE_ENV_ARGS = {
             "stabilize_objects":False, "normalize_mesh":True, "vision":True, "vision_args":{
                 "image_size":256, 'camera_names':['vision_cam_top']}, "goal_args": {
                     "randomize_goal_rot": False, "stabilize_goal":False}, "success_threshold": 
-                    {'obj_pos': 0.1}, "goal_reward_per_object":1.0},
+                    {'obj_pos': 0.05}, "goal_reward_per_object":1.0},
         "parameters": {
             "n_random_initial_steps": 0,
             "simulation_params": {"num_objects": 4, 'mesh_scale':1.5, 'used_table_portion': 1.0,
@@ -136,7 +136,9 @@ class MyRearrangeEnv2(
             self.num_constraints_already_satisfied = 0
             self.num_additional_constraints_to_satisfy = partial_constraints
             stata = self.get_state_data()
-            goal_env = make_env(**self.make_args)
+            make_args = self.make_args
+            make_args['parameters']["simulation_params"]['num_objects'] = self.num_objects
+            goal_env = make_env(**make_args)
             goal_env.load_state(stata)
             goal_qpos = self.goal_info()[2]['goal']['qpos_goal'].copy()
             for idx in range(self.partial_constraints):
@@ -443,8 +445,12 @@ if __name__ == "__main__":
         env_dict = pickle.load(file_pi)
     tasks = env_dict[7]
     env.load_state(tasks[0], partial_constraints=2)
-    env.save_state('test_save_partial')
     obs = env.i3observe()
+    plt.imsave('test_load_env.png', obs[0])
+    plt.imsave('test_load_env2.png', obs[1])
+    pdb.set_trace()
+    # env.save_state('test_save_partial')
+    obs = env.i3reset(partial_constraints=2)
     plt.imsave('testpartialStart.png',obs[0])
     plt.imsave('testpartialGoal.png',obs[1])
     pdb.set_trace()
