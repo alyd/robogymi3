@@ -1,3 +1,4 @@
+from functools import partial
 import logging
 from typing import List
 
@@ -11,6 +12,7 @@ from robogym.envs.rearrange.common.mesh import (
     MeshRearrangeEnvConstants,
     MeshRearrangeEnvParameters,
 )
+from robogym.envs.rearrange.common.utils import geom_ids_of_body
 from robogym.envs.rearrange.simulation.base import ObjectGroupConfig
 from robogym.envs.rearrange.simulation.mesh import MeshRearrangeSim
 from robogym.envs.rearrange.common.utils import find_meshes_by_dirname, get_combined_mesh
@@ -54,45 +56,17 @@ class MyRearrangeEnv2(
         super().initialize()
         self.task = lambda: None
         self.num_objects = self.parameters.simulation_params.num_objects
-        self.num_constraints = self.num_objects #TODO: partial goals
+        self.num_constraints_to_satisfy = self.num_objects #TODO: partial goals
         if self.num_objects < 6:
             setattr(self.task,'max_moves_required', self.num_objects)
+            self.num_constraints_already_satisfied = 0
+            self.num_additional_constraints_to_satisfy = self.num_objects
         else:
             setattr(self.task,'max_moves_required', 4)
+            self.num_constraints_already_satisfied = self.num_objects - 4
+            self.num_additional_constraints_to_satisfy = 4
         self.MESH_FILES = find_meshes_by_dirname('ycb')
         self.MESH_FILES.update(find_meshes_by_dirname('geom'))
-        if False:
-            big_meshes=[]
-            small_meshes = []
-            thin_meshes=['044_flat_screwdriver']
-            for meshname, meshfile in self.MESH_FILES.items():
-                mesh=get_combined_mesh(meshfile)
-                #threshold = 1.3*np.sqrt(2*8)# removes 74 meshes, works for 8 objects
-                # threshold = 1.4*np.sqrt(2*num_objects) # 39 meshes, used to collect 5 objects originally
-                #max_threshold = 1.2*np.sqrt(2*6) # removes 37 large meshes
-                #min_threshold=0.05 # removes 2 very small meshes
-                min_threshold = 0.1 #to collect data faster, use min threshold 0.13 and scale 1.8
-                skinny_threshold = 1.4
-                normed_extents = mesh.extents * self.constants.normalized_mesh_size/np.max(mesh.extents)
-                max_breadth = np.sqrt(normed_extents[0]**2+normed_extents[1]**2)
-                if max(mesh.extents[0]/mesh.extents[1], mesh.extents[1]/mesh.extents[0])>skinny_threshold:
-                    thin_meshes.append(meshname)  # delete long skinny objects
-                elif max_breadth*2 < min_threshold:
-                    small_meshes.append(meshname)
-                # elif (self.TABLE_WIDTH/(2*max_breadth) < max_threshold) or (self.TABLE_HEIGHT/(2*max_breadth) < max_threshold):
-                #     big_meshes.append(meshname)
-            # to visualize the deleted mesh files:
-            viz_meshes = VIZ_MESH_NAMES
-            if viz_meshes is not None:
-                print(viz_meshes)
-                print(len(viz_meshes))
-                new_mesh_files={}
-                for meshname in viz_meshes:
-                    new_mesh_files[meshname] = self.MESH_FILES[meshname]
-                self.MESH_FILES = new_mesh_files
-            else:
-                for meshname in small_meshes + thin_meshes:
-                    del self.MESH_FILES[meshname]
         print('choosing from ', len(self.MESH_FILES), ' meshes')
            
     def _sample_random_object_groups(
@@ -148,14 +122,39 @@ class MyRearrangeEnv2(
     # in implicit-iterative-inference
     def i3observe(self):
         current_image = render_env(self)
-        goal_image = self.observe()['vision_goal'][0]/255.0
-        return current_image, goal_image
+        return current_image, self.goal_image
+
+    def handle_partial_constraints(self, partial_constraints):
+        self.partial_constraints = partial_constraints
+        if self.partial_constraints ==-1:
+            self.goal_image = self.observe()['vision_goal'][0]/255.0
+        else:
+            self.num_constraints_to_satisfy = partial_constraints
+            setattr(self.task,'max_moves_required', partial_constraints)
+            self.num_constraints_already_satisfied = 0
+            self.num_additional_constraints_to_satisfy = partial_constraints
+            stata = self.get_state_data()
+            goal_env = make_env(deepcopy(self.parameters),deepcopy(self.constants))
+            goal_env.load_state(stata)
+            goal_qpos = self.goal_info()[2]['goal']['qpos_goal'].copy()
+            for idx in range(self.partial_constraints):
+                goal_env.mujoco_simulation.mj_sim.data.qpos[8+7*idx:8+7*(idx+1)] = goal_qpos[8+7*idx:8+7*(idx+1)]
+                goal_env.mujoco_simulation.forward()
+            geom_ids_to_hide = [
+                target_id
+                for i in range(self.partial_constraints, self.num_objects)
+                for target_id in geom_ids_of_body(goal_env.mujoco_simulation.mj_sim, f"object{i}")
+            ]
+            goal_env.mujoco_simulation.mj_sim.model.geom_rgba[geom_ids_to_hide, -1] = 0.0
+            self.goal_image = render_env(goal_env)
+        obs = self.i3observe() # needs to be called an extra time to refresh?
     
-    def i3reset(self):
+    def i3reset(self, partial_constraints=-1):
         _ = self.reset()
         while not self.goal_info()[2]['goal']['goal_valid']:
             print('goal invalid, resetting')
             _  = self.reset()
+        self.handle_partial_constraints(partial_constraints)
         return self.i3observe()
 
     def is_valid_action(self, object_idx, action):
@@ -175,10 +174,10 @@ class MyRearrangeEnv2(
             if _is_valid_proposal(b1_xy[0], b1_xy[1], len(obj_bboxes)-1, obj_bboxes, placements):
                 return True
             else:
-                print('invalid action, the object would collide with another object')
+                # print('invalid action, the object would collide with another object')
                 return False
         else:
-            print('invalid action, the object would be off the table')
+            # print('invalid action, the object would be off the table')
             return False
     
     def pick_and_place(self, action):
@@ -188,8 +187,8 @@ class MyRearrangeEnv2(
         pick_pos, delta_pos = action[:2], action[7:9]
         distances = [np.linalg.norm(obj_pos-pick_pos) for obj_pos in obj_positions]
         closest_obj = np.argmin(distances)
-        print('pick position: ', pick_pos, "delta position: ", delta_pos)
-        print("closest object idx: ", closest_obj, " distance: ", distances[closest_obj])
+        # print('pick position: ', pick_pos, "delta position: ", delta_pos)
+        # print("closest object idx: ", closest_obj, " distance: ", distances[closest_obj])
         if distances[closest_obj] < success_dist_threshold:
             if self.is_valid_action(closest_obj, action):
                 self.mujoco_simulation.mj_sim.data.qpos[8+7*closest_obj:8+7*closest_obj+2] += delta_pos
@@ -197,6 +196,8 @@ class MyRearrangeEnv2(
                 self.update_goal_info()
 
         goal_distances = np.linalg.norm(self.goal_info()[2]['rel_goal_obj_pos'][:,:2],axis=1)
+        if self.partial_constraints > 0:
+            goal_distances = goal_distances[:self.partial_constraints]
         if max(goal_distances) < success_dist_threshold:
             done = True
         reward = sum(goal_distances < success_dist_threshold)
@@ -232,7 +233,7 @@ class MyRearrangeEnv2(
         file_pi.close()
         pass
 
-    def load_state(self, state):
+    def load_state(self, state, partial_constraints=-1):
         pos_data = state[0]
         params = state[1]
         goal = state[2]
@@ -248,16 +249,19 @@ class MyRearrangeEnv2(
         self.mujoco_simulation.forward()
         self.update_goal_info()
         self._observe_sync(sync_type=SyncType.RESET_GOAL)
+        self.handle_partial_constraints(partial_constraints)
         pass
 
-    def load_pickle_state(self, path):
+    def load_pickle_state(self, path, partial_constraints=-1):
         file_pi = open(path, 'rb') 
         env_state = pickle.load(file_pi)
-        self.load_state(env_state)
+        self.load_state(env_state, partial_constraints=partial_constraints)
         file_pi.close()
         pass
 
 make_env = MyRearrangeEnv2.build
+
+
 
 # WIP:
 # def make_env(make_env_args, max_moves_required):
@@ -396,6 +400,7 @@ def my_place_objects_in_grid(
                 break
 
             placements.append(placement)
+        # the objects with unsatisfied goals are at the beginning of the list
         placements = placements[len(initial_placements):] + placements[n_goals_to_place:n_objects]
         if placement_valid:
             assert (
@@ -429,30 +434,43 @@ ObjectStateGoal._sample_next_goal_positions = my_sample_next_goal_positions
 
 
 if __name__ == "__main__":
-    #make_env_args['starting_seed'] = 14
-    #make_env_args['parameters']["simulation_params"]['num_objects'] = 3
-    # env = make_env(**make_env_args)
-    # obs = env.i3reset()
-
+    make_env_args['starting_seed'] = 14
+    make_env_args['parameters']["simulation_params"]['num_objects'] = 3
+    env = make_env(**make_env_args)
+    obs = env.i3reset()
+    env.save_state('test_save_partial')
+    plt.imsave('testpartialStart.png',obs[0])
+    plt.imsave('testpartialGoal.png',obs[1])
+    env2 = make_env(**make_env_args)
+    env2.load_pickle_state('test_save_partial', partial_constraints=2)
+    obs = env2.i3observe()
+    plt.imsave('test_load_env.png', obs[0])
+    plt.imsave('test_load_env2.png', obs[1])
+    pdb.set_trace()
+    #env.save_state('/share/test_load_env')
     # plt.imsave('/home/dayan/Documents/docker_share/testresetStart.png',obs[0])
     # if VIZ_MESH_NAMES is not None:
     #     plt.imsave('/home/dayan/Documents/docker_share/meshes/'+str(VIZ_MESH_NAMES)+'.png',obs[0])
     # plt.imsave('/home/dayan/Documents/docker_share/testresetGoal.png',obs[1])
     # pdb.set_trace()
-    # for idx in range(make_env_args['parameters']["simulation_params"]['num_objects']):
-    #     action = compute_action(env, idx)
-    #     assert(np.allclose(min(np.abs(action[7]-unique_dx)),0,atol=1e-5) and np.allclose(min(abs(action[8]-unique_dy)),0,atol=1e-5))
-    #     assert(env.is_valid_action(idx, action))
-    #     next_obs, reward, done, info = env.i3step(action)
-    #     assert reward == idx+1
-    #     plt.imsave('/share/testAction'+str(idx)+'.png',next_obs[0])
-    #     #assert(action[7:9] in unique_deltas)
+    for idx in range(make_env_args['parameters']["simulation_params"]['num_objects']):
+        action = compute_action(env, idx)
+        assert(env.is_valid_action(idx, action))
+        next_obs, reward, done, info = env.i3step(action)
+        if idx < env.partial_constraints:
+            assert reward == idx+1
+        else:
+            assert reward == env.partial_constraints
+        plt.imsave('testAction'+str(idx)+'.png',next_obs[0])
+        print(reward)
     #     if idx == -2+ make_env_args['parameters']["simulation_params"]['num_objects']:
     #         env.save_state('/share/test_load_env')
-    # pdb.set_trace()
+    pdb.set_trace()
     make_env_args['parameters']["simulation_params"]['num_objects'] = 6
     env2 = make_env(**make_env_args)
+    pdb.set_trace()
     env2.load_pickle_state('/home/dayan/Documents/docker_share/test_load_env')
+    obs = env2.i3observe()
     plt.imsave('/home/dayan/Documents/docker_share/test_load_env.png', env2.i3observe()[0])
     test_action = compute_action(env2, idx)
     assert np.allclose(test_action, action)

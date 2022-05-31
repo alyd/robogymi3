@@ -7,6 +7,7 @@ import utils
 NUM_OBJECTS = 4
 NUM_TASKS = 10
 HORIZON = 8
+PARTIAL_CONSTRAINTS = 2 # -1 for no partial constraints, supports up to min(num_objects, 4) partial constraints
 robo_env_args = rw.make_env_args
 robo_env_args['starting_seed'] = 0
 robo_env_args['parameters']["simulation_params"]['num_objects'] = NUM_OBJECTS
@@ -27,10 +28,10 @@ if premade_tasks_path is not None:
 for i in range(NUM_TASKS):
     # i3reset and i3observe generate image observations in the same format as the block envs 
     if premade_tasks_path is not None:
-        env.load_state(tasks[i]) # loads start and goal object meshes, scales, colors, positions, and orientations
+        env.load_state(tasks[i], partial_constraints=PARTIAL_CONSTRAINTS) # loads start and goal object meshes, scales, colors, positions, and orientations
         obs, done = env.i3observe(), False
     else:
-        obs, done = env.i3reset(), False
+        obs, done = env.i3reset(partial_constraints=PARTIAL_CONSTRAINTS), False
     for t in range(HORIZON):
         action = model(obs)
         # use i3step() instead of step() to handle actions in the same format as the block envs
