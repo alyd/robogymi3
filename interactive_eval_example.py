@@ -8,7 +8,7 @@ NUM_OBJECTS = 4
 NUM_TASKS = 10
 HORIZON = 8
 PARTIAL_CONSTRAINTS = 2 # -1 for no partial constraints, supports up to min(num_objects, 4) partial constraints
-robo_env_args = rw.make_env_args
+robo_env_args = rw.MAKE_ENV_ARGS
 robo_env_args['starting_seed'] = 0
 robo_env_args['parameters']["simulation_params"]['num_objects'] = NUM_OBJECTS
 # determines when an object is close enough to the goal to count as a match,

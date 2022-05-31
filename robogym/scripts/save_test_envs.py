@@ -8,7 +8,7 @@ DEBUG = False
 
 import matplotlib.pyplot as plt
 import pdb
-from robogym_wrapper import make_env, make_env_args
+from robogym_wrapper import make_env, MAKE_ENV_ARGS
 import pickle
 
 from data_collection_utils import create_h5, compute_action, render_env
@@ -41,8 +41,8 @@ def main():
     
     for object_num in config['object_nums']:
         states[object_num] = []
-        make_env_args['parameters']["simulation_params"]['num_objects'] = object_num
-        env = make_env(**make_env_args)
+        MAKE_ENV_ARGS['parameters']["simulation_params"]['num_objects'] = object_num
+        env = make_env(**MAKE_ENV_ARGS)
         assert env is not None, print('doesn\'t seem to be a valid environment')
         for j in tqdm.tqdm(range(config['n'])):
             obs=env.reset()
@@ -62,11 +62,11 @@ def main():
         file_pi = open(dataname, 'rb') 
         states = pickle.load(file_pi)
         file_pi.close()
-        make_env_args['parameters']["simulation_params"]['num_objects'] = 5
-        env2 = make_env(**make_env_args)
+        MAKE_ENV_ARGS['parameters']["simulation_params"]['num_objects'] = 5
+        env2 = make_env(**MAKE_ENV_ARGS)
         env2.load_state(states[5][0])
         plt.imsave('/share/test_load_env.png', env2.i3observe()[0])
-        env2 = make_env(**make_env_args)
+        env2 = make_env(**MAKE_ENV_ARGS)
         env2.load_state(states[5][1])
         plt.imsave('/share/test_load_env2.png', env2.i3observe()[0])
         action = compute_action(env2, 0)

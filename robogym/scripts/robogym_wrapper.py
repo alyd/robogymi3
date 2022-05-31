@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 VIZ_MESH_NAMES = None#['009_gelatin_box','050_medium_clamp'] #['002_master_chef_can', '073-f_lego_duplo']
  # with stabilization, the initial and goal objects got stabilized differently, 
 # causing an undesired rotation between start and goal state. thus I disabled "stabilize_objects"
-make_env_args = {
+MAKE_ENV_ARGS = {
         #"starting_seed": 5,
         "constants": {
             "success_reward":1.0,
@@ -55,7 +55,9 @@ class MyRearrangeEnv2(
     def initialize(self):
         super().initialize()
         self.task = lambda: None
+        self.make_args = MAKE_ENV_ARGS
         self.num_objects = self.parameters.simulation_params.num_objects
+        self.make_args['parameters']["simulation_params"]['num_objects'] = self.num_objects
         self.num_constraints_to_satisfy = self.num_objects #TODO: partial goals
         if self.num_objects < 6:
             setattr(self.task,'max_moves_required', self.num_objects)
@@ -134,7 +136,7 @@ class MyRearrangeEnv2(
             self.num_constraints_already_satisfied = 0
             self.num_additional_constraints_to_satisfy = partial_constraints
             stata = self.get_state_data()
-            goal_env = make_env(deepcopy(self.parameters),deepcopy(self.constants))
+            goal_env = make_env(**self.make_args)
             goal_env.load_state(stata)
             goal_qpos = self.goal_info()[2]['goal']['qpos_goal'].copy()
             for idx in range(self.partial_constraints):
@@ -434,14 +436,19 @@ ObjectStateGoal._sample_next_goal_positions = my_sample_next_goal_positions
 
 
 if __name__ == "__main__":
-    make_env_args['starting_seed'] = 14
-    make_env_args['parameters']["simulation_params"]['num_objects'] = 3
-    env = make_env(**make_env_args)
-    obs = env.i3reset()
+    MAKE_ENV_ARGS['starting_seed'] = 14
+    MAKE_ENV_ARGS['parameters']["simulation_params"]['num_objects'] = 7
+    env = make_env(**MAKE_ENV_ARGS)
+    with open('/home/dayan/Documents/docker_share/env_states20220519151709', 'rb') as file_pi:
+        env_dict = pickle.load(file_pi)
+    tasks = env_dict[7]
+    env.load_state(tasks[0], partial_constraints=2)
     env.save_state('test_save_partial')
+    obs = env.i3observe()
     plt.imsave('testpartialStart.png',obs[0])
     plt.imsave('testpartialGoal.png',obs[1])
-    env2 = make_env(**make_env_args)
+    pdb.set_trace()
+    env2 = make_env(**MAKE_ENV_ARGS)
     env2.load_pickle_state('test_save_partial', partial_constraints=2)
     obs = env2.i3observe()
     plt.imsave('test_load_env.png', obs[0])
@@ -453,7 +460,7 @@ if __name__ == "__main__":
     #     plt.imsave('/home/dayan/Documents/docker_share/meshes/'+str(VIZ_MESH_NAMES)+'.png',obs[0])
     # plt.imsave('/home/dayan/Documents/docker_share/testresetGoal.png',obs[1])
     # pdb.set_trace()
-    for idx in range(make_env_args['parameters']["simulation_params"]['num_objects']):
+    for idx in range(MAKE_ENV_ARGS['parameters']["simulation_params"]['num_objects']):
         action = compute_action(env, idx)
         assert(env.is_valid_action(idx, action))
         next_obs, reward, done, info = env.i3step(action)
@@ -466,8 +473,8 @@ if __name__ == "__main__":
     #     if idx == -2+ make_env_args['parameters']["simulation_params"]['num_objects']:
     #         env.save_state('/share/test_load_env')
     pdb.set_trace()
-    make_env_args['parameters']["simulation_params"]['num_objects'] = 6
-    env2 = make_env(**make_env_args)
+    MAKE_ENV_ARGS['parameters']["simulation_params"]['num_objects'] = 6
+    env2 = make_env(**MAKE_ENV_ARGS)
     pdb.set_trace()
     env2.load_pickle_state('/home/dayan/Documents/docker_share/test_load_env')
     obs = env2.i3observe()

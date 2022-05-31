@@ -11,7 +11,7 @@ ACTION_SPACE = 14
 
 import matplotlib.pyplot as plt
 import pdb
-from robogym_wrapper import make_env, make_env_args
+from robogym_wrapper import make_env, MAKE_ENV_ARGS
 
 from data_collection_utils import create_h5, compute_action, render_env
 import datetime
@@ -32,18 +32,18 @@ def main():
         39 meshes threshold = 1.4*np.sqrt(10) 5obj dataset: implicit-iterative-inference/data/robogym/5objs.h5 (stopped at 80%)
     """
     # override the default arguments from robogym_wrapper.py
-    make_env_args['parameters']["simulation_params"]['num_objects'] = config['num_objects']
-    make_env_args['constants']['success_reward'] = config['goal_reward']
+    MAKE_ENV_ARGS['parameters']["simulation_params"]['num_objects'] = config['num_objects']
+    MAKE_ENV_ARGS['constants']['success_reward'] = config['goal_reward']
     #make_env_args['starting_seed'] = 15 # 8
     seqlen = config['num_objects'] + 1
-    env = make_env(**make_env_args)
+    env = make_env(**MAKE_ENV_ARGS)
     assert env is not None, print('doesn\'t seem to be a valid environment')
     if SAVE_h5:
         dataname = f"{OUTPUT_DIR}/{datetime.datetime.now():%Y%m%d%H%M%S}_{config['num_objects']}objs"
         if DEBUG:
             dataname = dataname + 'debug'
         print(f'Writing to {dataname}...')
-        h5 = create_h5(dataname, config, seqlen, make_env_args)
+        h5 = create_h5(dataname, config, seqlen, MAKE_ENV_ARGS)
     
         for j in tqdm.tqdm(range(config['n'])):
             obs=env.i3reset()
