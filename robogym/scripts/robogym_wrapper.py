@@ -184,14 +184,17 @@ class MyRearrangeEnv2(
             # print('invalid action, the object would be off the table')
             return False
     
-    def pick_and_place(self, action):
+    def pick_and_place(self, action, action_noise_scale=0):
         done = False 
         obj_positions = self.goal_info()[2]['current_state']['obj_pos'][:,:2]
         success_dist_threshold = self.constants.success_threshold['obj_pos']
+        if action_noise_scale > 0:
+            noise_vec = self._random_state.normal(loc=0,scale=action_noise_scale,size=len(action))
+            action += noise_vec
         pick_pos, delta_pos = action[:2], action[7:9]
         distances = [np.linalg.norm(obj_pos-pick_pos) for obj_pos in obj_positions]
         closest_obj = np.argmin(distances)
-        # print('pick position: ', pick_pos, "delta position: ", delta_pos)
+        print('pick position: ', pick_pos, "delta position: ", delta_pos)
         # print("closest object idx: ", closest_obj, " distance: ", distances[closest_obj])
         if distances[closest_obj] < success_dist_threshold:
             if self.is_valid_action(closest_obj, action):
@@ -207,15 +210,15 @@ class MyRearrangeEnv2(
         reward = sum(goal_distances < success_dist_threshold)
         return reward, done
 
-    def i3step(self, action):
-        reward, done = self.pick_and_place(action)
+    def i3step(self, action, action_noise_scale=0):
+        reward, done = self.pick_and_place(action, action_noise_scale=action_noise_scale)
         obs = self.i3observe()
         return obs, reward, done, None
     
     def sample_option(self):
         """"
         sample a random action, so a random pick location inside the table placement area
-        and one of the 126 possible delta positions
+        and a delta position that will keep the object within the placement area
         """
         action = np.zeros(14)
         pos_x_min, pos_x_max, pos_y_min, pos_y_max = get_placement_bounds(self)
@@ -445,6 +448,7 @@ if __name__ == "__main__":
         env_dict = pickle.load(file_pi)
     tasks = env_dict[7]
     env.load_state(tasks[0], partial_constraints=2)
+    pdb.set_trace()
     obs = env.i3observe()
     plt.imsave('test_load_env.png', obs[0])
     plt.imsave('test_load_env2.png', obs[1])
