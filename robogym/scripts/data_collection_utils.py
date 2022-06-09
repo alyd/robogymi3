@@ -1,4 +1,4 @@
-#ßimport h5py
+import h5py
 #ßimport ujson
 import numpy as np
 from robogym.utils.rotation import euler2quat
@@ -142,10 +142,12 @@ if __name__ == "__main__":
     #dataname = '/home/dayan/Documents/docker_share/20220509225906_8objs.h5'
     #visualize_start_positions('/home/dayan/Documents/implicit-iterative-inference/data/robogym/20220419212432RGB1.h5')
     #visualize_start_positions('/home/dayan/Documents/docker_share/20220509225906_8objs.h5')
-    
-    dataname='/share/20220419212432RGB1_4objs.h5'
-    dataname='/share/20220516170912_4objs.h5'
-    f = h5py.File(dataname, 'r')
+    dataname='/home/dayan/Documents/implicit-iterative-inference/data/robogym/20220419212432RGB1.h5'
+    # dataname='/share/20220419212432RGB1_4objs.h5'
+    # dataname='/share/20220516170912_4objs.h5'
+    #f = h5py.File(dataname, 'r')
+    unique_deltas, unique_dx, unique_dy = get_unique_position_deltas(dataname)
+    pdb.set_trace()
     plt.imsave('/share/testh5.png',f['image'][-1,0,0])
     visualize_start_positions(dataname)
     #print([len(i) for i in get_unique_position_deltas(dataname)])

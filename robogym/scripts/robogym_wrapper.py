@@ -194,7 +194,7 @@ class MyRearrangeEnv2(
         pick_pos, delta_pos = action[:2], action[7:9]
         distances = [np.linalg.norm(obj_pos-pick_pos) for obj_pos in obj_positions]
         closest_obj = np.argmin(distances)
-        print('pick position: ', pick_pos, "delta position: ", delta_pos)
+        #print('pick position: ', pick_pos, "delta position: ", delta_pos)
         # print("closest object idx: ", closest_obj, " distance: ", distances[closest_obj])
         if distances[closest_obj] < success_dist_threshold:
             if self.is_valid_action(closest_obj, action):
@@ -209,6 +209,11 @@ class MyRearrangeEnv2(
             done = True
         reward = sum(goal_distances < success_dist_threshold)
         return reward, done
+
+    def null_action(self):
+        action = self.sample_option()
+        action = action*0
+        return action 
 
     def i3step(self, action, action_noise_scale=0):
         reward, done = self.pick_and_place(action, action_noise_scale=action_noise_scale)
@@ -441,13 +446,29 @@ ObjectStateGoal._sample_next_goal_positions = my_sample_next_goal_positions
 
 
 if __name__ == "__main__":
-    MAKE_ENV_ARGS['starting_seed'] = 14
-    MAKE_ENV_ARGS['parameters']["simulation_params"]['num_objects'] = 7
+    MAKE_ENV_ARGS['starting_seed'] =7
+    MAKE_ENV_ARGS['parameters']["simulation_params"]['num_objects'] = 4
     env = make_env(**MAKE_ENV_ARGS)
-    with open('/home/dayan/Documents/docker_share/env_states20220519151709', 'rb') as file_pi:
-        env_dict = pickle.load(file_pi)
-    tasks = env_dict[7]
-    env.load_state(tasks[0], partial_constraints=2)
+    # with open('/home/dayan/Documents/docker_share/env_states20220519151709', 'rb') as file_pi:
+    #     env_dict = pickle.load(file_pi)
+    # tasks = env_dict[5]
+    # env.load_state(tasks[3], partial_constraints=-1)
+    obs = env.i3reset()
+    action = compute_action(env, 0)
+    print(action)
+    print(env.null_action())
+    pdb.set_trace()
+    plt.imsave('visualizations/frame0.png',obs[0])
+    goal_distances = np.linalg.norm(env.goal_info()[2]['rel_goal_obj_pos'][:,:2],axis=1)
+    print(goal_distances)
+    for idx in range(env.parameters.simulation_params.num_objects):
+        action = compute_action(env, idx)
+        next_obs, reward, done, info = env.i3step(action)
+        print(reward)
+        goal_distances = np.linalg.norm(env.goal_info()[2]['rel_goal_obj_pos'][:,:2],axis=1)
+        print(goal_distances)
+        pdb.set_trace()
+        plt.imsave('visualizations/frame'+str(idx+1)+'.png',next_obs[0])
     pdb.set_trace()
     obs = env.i3observe()
     plt.imsave('test_load_env.png', obs[0])
