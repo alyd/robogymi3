@@ -1,3 +1,5 @@
+Notes: I'm using python 3.8.13 with mujoco200 
+
 **Status**: Archive (code is provided as-is, no updates expected)
 
 # Robogym
