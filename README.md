@@ -2,8 +2,7 @@ Notes from Li:
 I'm using python 3.8.13 with mujoco200 
 The code I added is all in robogym/scripts
 
-First I installed mujoco200 following this:
-https://www.chenshiyu.top/blog/2019/06/19/Tutorial-Installation-and-Configuration-of-MuJoCo-Gym-Baselines/
+First I installed mujoco200 (mostly following this: https://www.chenshiyu.top/blog/2019/06/19/Tutorial-Installation-and-Configuration-of-MuJoCo-Gym-Baselines/)
 
 and added this to .bashrc:
 ```
