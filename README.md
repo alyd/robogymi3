@@ -1,3 +1,36 @@
+Notes from Li:
+I'm using python 3.8.13 with mujoco200 
+The code I added is all in robogym/scripts
+
+First I installed mujoco200 (mostly following this: https://www.chenshiyu.top/blog/2019/06/19/Tutorial-Installation-and-Configuration-of-MuJoCo-Gym-Baselines/)
+
+and added this to .bashrc:
+```
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/username/.mujoco/mujoco200/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia
+```
+
+Then I installed mujoco-py as follows:
+```
+conda create -n robogym python=3.8
+conda activate robogym
+pip install mujoco-py==2.0.2.13
+pip install --upgrade numpy
+```
+
+finally installed robogym:
+```
+pip install git+https://github.com/openai/robogym.git
+```
+
+if robogym is not found when importing it in python, add this to .bashrc:
+```
+export PYTHONPATH=$PYTHONPATH:/your/path/to/robogymi3
+```
+
+
+
+
 **Status**: Archive (code is provided as-is, no updates expected)
 
 # Robogym
