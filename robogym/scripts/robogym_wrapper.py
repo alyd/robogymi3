@@ -23,6 +23,7 @@ from robogym.envs.rearrange.common.utils import _is_valid_proposal
 from data_collection_utils import render_env, unique_deltas, unique_dx, unique_dy, compute_action, get_placement_bounds
 import matplotlib.pyplot as plt
 import pdb
+import gym 
 logger = logging.getLogger(__name__)
 
 VIZ_MESH_NAMES = None#['009_gelatin_box','050_medium_clamp'] #['002_master_chef_can', '073-f_lego_duplo']
@@ -69,6 +70,7 @@ class MyRearrangeEnv2(
             self.num_additional_constraints_to_satisfy = 4
         self.MESH_FILES = find_meshes_by_dirname('ycb')
         self.MESH_FILES.update(find_meshes_by_dirname('geom'))
+        self.placement_bounds = get_placement_bounds(self)
         print('choosing from ', len(self.MESH_FILES), ' meshes')
            
     def _sample_random_object_groups(
@@ -167,7 +169,7 @@ class MyRearrangeEnv2(
         placements = np.copy(self.goal_info()[2]['current_state']['obj_pos'][:,:3])
         b1_xy = placements[object_idx][:2] + action[7:9]
         # is the object going to still be on the table?
-        pos_x_min, pos_x_max, pos_y_min, pos_y_max = get_placement_bounds(self)
+        pos_x_min, pos_x_max, pos_y_min, pos_y_max = self.placement_bounds
         mins = [pos_x_min, pos_y_min]+mesh_size[:2]-mesh_pos[:2]
         maxes = [pos_x_max, pos_y_max] - mesh_size[:2] - mesh_pos[:2]
         above_min = np.logical_or(np.greater(b1_xy, mins),np.isclose(b1_xy, mins, atol=1e-5))
@@ -178,10 +180,10 @@ class MyRearrangeEnv2(
             if _is_valid_proposal(b1_xy[0], b1_xy[1], len(obj_bboxes)-1, obj_bboxes, placements):
                 return True
             else:
-                # print('invalid action, the object would collide with another object')
+                print('invalid action, the object would collide with another object')
                 return False
         else:
-            # print('invalid action, the object would be off the table')
+            print('invalid action, the object would be off the table')
             return False
     
     def pick_and_place(self, action, action_noise_scale=0):
@@ -201,6 +203,8 @@ class MyRearrangeEnv2(
                 self.mujoco_simulation.mj_sim.data.qpos[8+7*closest_obj:8+7*closest_obj+2] += delta_pos
                 self.mujoco_simulation.forward()
                 self.update_goal_info()
+        else:
+            print("no-op because pick location is too far from any object")
 
         goal_distances = np.linalg.norm(self.goal_info()[2]['rel_goal_obj_pos'][:,:2],axis=1)
         if self.partial_constraints > 0:
@@ -219,6 +223,23 @@ class MyRearrangeEnv2(
         reward, done = self.pick_and_place(action, action_noise_scale=action_noise_scale)
         obs = self.i3observe()
         return obs, reward, done, None
+
+    def get_action_space(self):
+        pos_x_min, pos_x_max, pos_y_min, pos_y_max = self.placement_bounds
+        action_space = gym.spaces.Box(
+          low=np.array([pos_x_min, pos_y_min, 0,0,0,0,0,pos_x_min-pos_x_max, pos_y_min-pos_y_max,0,0,0,0,0]),
+          high=np.array([pos_x_max, pos_y_max, 0,0,0,0,0,pos_x_max-pos_x_min,pos_y_max-pos_y_min,0,0,0,0,0]),
+          dtype=np.float32)
+        return action_space
+
+    def get_observation_space(self):
+        observation_space = gym.spaces.Box(
+            low=0.0,
+            high=1.0,
+            shape=(256,256,3),
+            dtype=np.float32)
+        # nb this gets resized, permuted and concatenated with the goal image into (64, 64, 6, 1)
+        return observation_space
     
     def sample_option(self):
         """"
@@ -226,13 +247,14 @@ class MyRearrangeEnv2(
         and a delta position that will keep the object within the placement area
         """
         action = np.zeros(14)
-        pos_x_min, pos_x_max, pos_y_min, pos_y_max = get_placement_bounds(self)
+        pos_x_min, pos_x_max, pos_y_min, pos_y_max = self.placement_bounds
         pos_x = self._random_state.uniform(low=pos_x_min,high=pos_x_max)
         pos_y = self._random_state.uniform(low=pos_y_min,high=pos_y_max)
         delta_x = self._random_state.uniform(low=pos_x_min - pos_x, high=pos_x_max - pos_x)
         delta_y = self._random_state.uniform(low=pos_y_min - pos_y, high=pos_y_max - pos_y)
         action[7:9] = delta_x, delta_y
         action[:2] = pos_x, pos_y
+        #print('sampled action: ', action[:2])
         return action
 
     def get_state_data(self):
@@ -272,19 +294,6 @@ class MyRearrangeEnv2(
         pass
 
 make_env = MyRearrangeEnv2.build
-
-
-
-# WIP:
-# def make_env(make_env_args, max_moves_required):
-#     env = MyRearrangeEnv2.build(**make_env_args)
-#     num_unchanged_objs = make_env_args['parameters']["simulation_params"]['num_objects'] - max_moves_required
-#     for obj_id in range(num_unchanged_objs):
-#         action = compute_action(env, obj_id)
-#         _ = env.pick_and_place(action)
-#     goal_distances = np.linalg.norm(self.goal_info()[2]['rel_goal_obj_pos'][:,:2],axis=1)
-#     assert(sum(goal_distances < 0.001)==num_unchanged_objs)
-#     return env
         
       
 from robogym.envs.rearrange.goals.object_state import ObjectStateGoal
@@ -449,11 +458,17 @@ if __name__ == "__main__":
     MAKE_ENV_ARGS['starting_seed'] =7
     MAKE_ENV_ARGS['parameters']["simulation_params"]['num_objects'] = 4
     env = make_env(**MAKE_ENV_ARGS)
-    # with open('/home/dayan/Documents/docker_share/env_states20220519151709', 'rb') as file_pi:
-    #     env_dict = pickle.load(file_pi)
-    # tasks = env_dict[5]
-    # env.load_state(tasks[3], partial_constraints=-1)
-    obs = env.i3reset()
+    with open('/home/dayan/Documents/docker_share/env_states20220519151709', 'rb') as file_pi:
+        env_dict = pickle.load(file_pi)
+    tasks = env_dict[4]
+    # 4 7 10
+    env.load_state(tasks[7], partial_constraints=2)
+    obs = env.i3observe()
+    pdb.set_trace()
+    #obs = env.i3reset()
+    plt.imsave('visualizations/partial_start.png',obs[0])
+    plt.imsave('visualizations/partial_goal.png',obs[1])
+    pdb.set_trace()
     action = compute_action(env, 0)
     print(action)
     print(env.null_action())
