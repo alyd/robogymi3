@@ -28,8 +28,14 @@ if robogym is not found when importing it in python, add this to .bashrc:
 export PYTHONPATH=$PYTHONPATH:/your/path/to/robogymi3
 ```
 
-
-
+##  Debugging:
+Error message:
+```
+warning_buffer.py:19] MUJOCO ERROR: Shadow framebuffer is not complete, error 0x8cd7
+warning_buffer.py:19] MUJOCO ERROR: Could not allocate display lists
+```
+Solution:
+Use ```MUJOCO_GL=“osmesa”``` instead of ```“egl”```
 
 **Status**: Archive (code is provided as-is, no updates expected)
 
